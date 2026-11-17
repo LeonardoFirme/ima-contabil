@@ -100,7 +100,7 @@ public class MainApp extends Application {
 
         ProgressBar progressBar = new ProgressBar();
         progressBar.setPrefWidth(260);
-        progressBar.setStyle("-fx-accent: #00db57;");
+        progressBar.setStyle("-fx-accent: #097f29;");
 
         VBox contentBox = new VBox(15, lblTitulo, lblSub, progressBar);
         contentBox.setAlignment(Pos.CENTER);
@@ -165,7 +165,7 @@ public class MainApp extends Application {
 
         Button btnEntrar = new Button("Acessar Sistema ➔");
         btnEntrar.setStyle(
-            "-fx-background-color: #00db57; " +
+            "-fx-background-color: #097f29; " +
             "-fx-text-fill: white; " +
             "-fx-font-weight: bold; " +
             "-fx-font-size: 14px; " +
@@ -187,12 +187,12 @@ public class MainApp extends Application {
 
         Pane overlay = new Pane();
         overlay.setStyle("-fx-background-color: rgba(0, 0, 0, 0.55);");
-        overlay.setPrefSize(640, 420);
+        overlay.setPrefSize(1024, 768);
 
         StackPane welcomeLayout = new StackPane();
         ImageView bgImageView = new ImageView();
         try {
-            var resource = MainApp.class.getResource("/splash-bg.png");
+            var resource = MainApp.class.getResource("/IMA-1024x768.png");
             if (resource != null) {
                 Image bgImage = new Image(resource.toExternalForm());
                 bgImageView.setImage(bgImage);
@@ -204,7 +204,7 @@ public class MainApp extends Application {
 
         welcomeLayout.getChildren().addAll(bgImageView, overlay, contentBox);
 
-        Scene scene = new Scene(welcomeLayout, 640, 420);
+        Scene scene = new Scene(welcomeLayout, 1024, 768);
         welcomeStage.setScene(scene);
         welcomeStage.centerOnScreen();
         welcomeStage.show();
@@ -222,7 +222,7 @@ public class MainApp extends Application {
             }
         } catch (Exception ignored) {}
 
-        lblTituloApp = new Label("IMA Contábil - Editor de Lotes (XLS, XLSX, CSV)");
+        lblTituloApp = new Label("Editor de Lotes (XLS, XLSX, CSV)");
         lblTituloApp.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #2c3e50;");
 
         TableView<RowData> table = new TableView<>();
@@ -267,7 +267,7 @@ public class MainApp extends Application {
 
         Button btnImportCenter = new Button("📁 Importar Arquivo (.xls / .xlsx / CSV)");
         btnImportCenter.setStyle(
-            "-fx-background-color: #00db57; " +
+            "-fx-background-color: #097f29; " +
             "-fx-text-fill: white; " +
             "-fx-font-weight: bold; " +
             "-fx-font-size: 12px; " +
@@ -422,7 +422,7 @@ public class MainApp extends Application {
         Button btnProcess = new Button("⚡ Salvar na Lista & Gerar PDF");
         btnProcess.setMaxWidth(Double.MAX_VALUE);
         btnProcess.setStyle(
-            "-fx-background-color: #00db57; " +
+            "-fx-background-color: #097f29; " +
             "-fx-text-fill: white; " +
             "-fx-font-weight: bold; " +
             "-fx-font-size: 13px; " +
@@ -719,7 +719,7 @@ public class MainApp extends Application {
         root.setCenter(splitPane);
         root.setBottom(footerBox);
 
-        Scene scene = new Scene(root, 1050, 620);
+        Scene scene = new Scene(root, 1600, 1200);
 
         primaryStage.setScene(scene);
         primaryStage.centerOnScreen();
