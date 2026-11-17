@@ -1,0 +1,7 @@
+﻿/target/
+/output-installer/
+*.class
+*.log
+.idea/
+.vscode/
+*.iml
