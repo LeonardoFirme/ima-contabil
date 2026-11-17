@@ -46,7 +46,7 @@ import java.util.Locale;
 public class MainApp extends Application {
 
     // Versão atual do aplicativo instalado
-    private static final String VERSAO_ATUAL = "1.0.0";
+    private static final String VERSAO_ATUAL = "1.0.1";
     // Substitua pelo seu token PAT do GitHub e URL do arquivo version.json no repo privado
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String GITHUB_PAT_TOKEN = "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";
