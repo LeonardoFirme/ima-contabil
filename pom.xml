@@ -16,21 +16,16 @@
     </properties>
 
     <dependencies>
-        <!-- JavaFX Controls -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-
-        <!-- JavaFX FXML -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-
-        <!-- Apache POI para leitura de arquivos Excel (.xls e .xlsx) -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
@@ -41,8 +36,6 @@
             <artifactId>poi-ooxml</artifactId>
             <version>${poi.version}</version>
         </dependency>
-
-        <!-- Log4j API e Core exigidos pelo Apache POI -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
@@ -57,32 +50,7 @@
 
     <build>
         <plugins>
-            <!-- Plugin oficial do JavaFX -->
-            <plugin>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
-                <configuration>
-                    <mainClass>com.app.MainApp</mainClass>
-                </configuration>
-            </plugin>
-
-            <!-- Plugin do JAR com manifesto principal -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <addClasspath>true</addClasspath>
-                            <mainClass>com.app.MainApp</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-
-            <!-- Plugin para copiar todas as dependências para a pasta target/ -->
+            <!-- Copia todas as dependências soltas para a pasta target -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -99,6 +67,32 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- Plugin jpackage configurado com os argumentos nativos da JVM e módulos -->
+            <plugin>
+                <groupId>org.panteleyev</groupId>
+                <artifactId>jpackage-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <configuration>
+                    <name>IMA Contábil</name>
+                    <appVersion>1.0.0</appVersion>
+                    <vendor>Leonardo Firme</vendor>
+                    <icon>logo.ico</icon>
+                    <type>MSI</type>
+                    <destination>output-installer</destination>
+                    <input>target</input>
+                    <mainJar>desktop-1.0-SNAPSHOT.jar</mainJar>
+                    <mainClass>com.app.MainApp</mainClass>
+                    <winShortcut>true</winShortcut>
+                    <winMenu>true</winMenu>
+                    <javaOptions>
+                        <option>--module-path</option>
+                        <option>$APPDIR</option>
+                        <option>--add-modules</option>
+                        <option>javafx.controls,javafx.fxml</option>
+                    </javaOptions>
+                </configuration>
             </plugin>
         </plugins>
     </build>
