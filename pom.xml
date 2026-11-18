@@ -1,3 +1,4 @@
+<!-- C:\developer\project-01\desktop\pom.xml -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -66,7 +67,6 @@
                 </configuration>
             </plugin>
 
-            <!-- Copia todas as dependências diretamente para a raiz da pasta target -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -86,7 +86,6 @@
                 </executions>
             </plugin>
 
-            <!-- Gera o manifesto incluindo todas as dependências no Class-Path -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -95,13 +94,12 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>com.app.Main</mainClass>
+                            <mainClass>com.app.MainApp</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
             </plugin>
 
-            <!-- JPackage empacotando em modo puro Classpath (Sem modulos) -->
             <plugin>
                 <groupId>org.panteleyev</groupId>
                 <artifactId>jpackage-maven-plugin</artifactId>
@@ -115,11 +113,10 @@
                     <destination>output-installer</destination>
                     <input>target</input>
                     <mainJar>desktop-1.0-SNAPSHOT.jar</mainJar>
-                    <mainClass>com.app.Main</mainClass>
+                    <mainClass>com.app.MainApp</mainClass>
                     <winShortcut>true</winShortcut>
                     <winMenu>true</winMenu>
                     <winConsole>false</winConsole>
-                    <!-- O UUID deve permanecer idêntico em todas as versões para permitir o upgrade automático -->
                     <winUpgradeUuid>F1234567-89AB-CDEF-0123-456789ABCDEF</winUpgradeUuid>
                 </configuration>
             </plugin>
