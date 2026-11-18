@@ -43,6 +43,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * IMA Contábil - Desktop Lite
+ * Classe principal responsável pela interface gráfica e lógica de negócio local.
+ */
 public class MainApp extends Application {
 
     private static final String VERSAO_ATUAL = "1.0.0";
@@ -753,15 +757,14 @@ public class MainApp extends Application {
         task.setOnSucceeded(e -> {
             String[] resultado = task.getValue();
             if (resultado != null && resultado[0] != null && !resultado[0].equals(VERSAO_ATUAL)) {
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                alert.initOwner(ownerStage);
-                alert.setTitle("Atualização Disponível");
-                alert.setHeaderText("Nova versão v" + resultado[0] + " disponível!");
-                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja baixar e atualizar o sistema automaticamente?");
-
-                if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                    executarAtualizacaoAutomatica(resultado[1]);
-                }
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.initOwner(ownerStage);
+                    alert.setTitle("Nova Versão Disponível");
+                    alert.setHeaderText("Existe uma atualização para a versão v" + resultado[0]);
+                    alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ".\nAcesse o repositório do projeto para baixar a nova versão.");
+                    alert.showAndWait();
+                });
             }
         });
 
@@ -799,18 +802,14 @@ public class MainApp extends Application {
         task.setOnSucceeded(e -> {
             String[] resultado = task.getValue();
             String versaoRemota = resultado[0];
-            String urlDownload = resultado[1];
 
             if (!versaoRemota.equals(VERSAO_ATUAL)) {
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.initOwner(ownerStage);
-                alert.setTitle("Atualização Disponível");
-                alert.setHeaderText("Nova versão v" + versaoRemota + " disponível!");
-                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja baixar e atualizar o sistema automaticamente?");
-
-                if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                    executarAtualizacaoAutomatica(urlDownload);
-                }
+                alert.setTitle("Nova Versão Disponível");
+                alert.setHeaderText("Existe uma atualização para a versão v" + versaoRemota);
+                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ".\nAcesse o GitHub para efetuar o download da nova versão.");
+                alert.showAndWait();
             } else {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.initOwner(ownerStage);
@@ -831,40 +830,6 @@ public class MainApp extends Application {
         });
 
         new Thread(task).start();
-    }
-
-    private void executarAtualizacaoAutomatica(String urlDownload) {
-        Task<Void> downloadTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                String msiUrl = urlDownload.endsWith(".msi") ? urlDownload : "https://github.com/leonardofirme/ima-contabil/releases/latest/download/IMA-Contabil.msi";
-
-                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(msiUrl)).GET().build();
-
-                File tempMsi = new File(System.getProperty("java.io.tmpdir"), "update-ima.msi");
-                HttpResponse<java.nio.file.Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(tempMsi.toPath()));
-
-                if (response.statusCode() == 200 && tempMsi.exists()) {
-                    ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", tempMsi.getAbsolutePath(), "/quiet", "/norestart");
-                    pb.start();
-                    Platform.runLater(() -> System.exit(0));
-                }
-                return null;
-            }
-        };
-
-        downloadTask.setOnFailed(e -> {
-            Platform.runLater(() -> {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Erro na Atualização");
-                alert.setHeaderText("Falha ao baixar o instalador.");
-                alert.setContentText(downloadTask.getException().getMessage());
-                alert.showAndWait();
-            });
-        });
-
-        new Thread(downloadTask).start();
     }
 
     private String extrairValorJson(String json, String chave) {
