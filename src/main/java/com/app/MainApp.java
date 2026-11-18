@@ -838,71 +838,71 @@ public class MainApp extends Application {
     }
 
     private void baixarEAtualizarJar(String urlDownload, Stage ownerStage) {
-        Task<File> downloadTask = new Task<>() {
-            @Override
-            protected File call() throws Exception {
-                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
-                        .uri(URI.create(urlDownload))
-                        .header("Accept", "application/octet-stream")
-                        .GET();
+    Task<File> downloadTask = new Task<>() {
+        @Override
+        protected File call() throws Exception {
+            HttpClient client = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
 
-                if (GITHUB_PAT_TOKEN != null && !GITHUB_PAT_TOKEN.isEmpty()) {
-                    reqBuilder.header("Authorization", "Bearer " + GITHUB_PAT_TOKEN);
-                }
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(urlDownload))
+                    .GET()
+                    .build();
 
+            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() == 200) {
                 File tempJar = new File(System.getProperty("java.io.tmpdir"), "ima-contabil-novo.jar");
-                HttpResponse<InputStream> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
-
-                if (response.statusCode() == 200) {
-                    Files.copy(response.body(), tempJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    return tempJar;
-                }
-                throw new Exception("Falha no download. HTTP: " + response.statusCode());
+                Files.copy(response.body(), tempJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                return tempJar;
             }
-        };
 
-        downloadTask.setOnSucceeded(e -> {
-            File novoJar = downloadTask.getValue();
-            Platform.runLater(() -> {
-                try {
-                    File jarAtual = new File(MainApp.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            throw new Exception("Falha no download. HTTP: " + response.statusCode());
+        }
+    };
 
-                    File batFile = new File(System.getProperty("java.io.tmpdir"), "atualizar.bat");
-                    String conteudoBat =
-                        "@echo off\n" +
-                        "timeout /t 2 /nobreak > nul\n" +
-                        "copy /y \"" + novoJar.getAbsolutePath() + "\" \"" + jarAtual.getAbsolutePath() + "\"\n" +
-                        "start \"\" java --module-path target --add-modules javafx.controls,javafx.fxml -jar \"" + jarAtual.getAbsolutePath() + "\"\n" +
-                        "del \"%~f0\"\n";
+    downloadTask.setOnSucceeded(e -> {
+        File novoJar = downloadTask.getValue();
+        Platform.runLater(() -> {
+            try {
+                File jarAtual = new File(MainApp.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                File batFile = new File(System.getProperty("java.io.tmpdir"), "atualizar.bat");
 
-                    Files.writeString(batFile.toPath(), conteudoBat, StandardCharsets.UTF_8);
+                String conteudoBat =
+                    "@echo off\n" +
+                    "chcp 65001 > nul\n" +
+                    "timeout /t 3 /nobreak > nul\n" +
+                    "copy /y \"" + novoJar.getAbsolutePath() + "\" \"" + jarAtual.getAbsolutePath() + "\"\n" +
+                    "cd /d \"" + jarAtual.getParent() + "\"\n" +
+                    "start \"\" java --module-path target --add-modules javafx.controls,javafx.fxml -jar \"" + jarAtual.getAbsolutePath() + "\"\n" +
+                    "del \"%~f0\"\n";
 
-                    new ProcessBuilder("cmd.exe", "/c", batFile.getAbsolutePath()).start();
+                Files.writeString(batFile.toPath(), conteudoBat, StandardCharsets.UTF_8);
+                new ProcessBuilder("cmd.exe", "/c", batFile.getAbsolutePath()).start();
 
-                    Platform.exit();
-                    System.exit(0);
-
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            });
+                Platform.exit();
+                System.exit(0);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         });
+    });
 
-        downloadTask.setOnFailed(e -> {
-            Throwable ex = downloadTask.getException();
-            ex.printStackTrace();
-            Platform.runLater(() -> {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Erro na Atualização");
-                alert.setHeaderText("Não foi possível baixar a nova versão.");
-                alert.setContentText(ex != null ? ex.getMessage() : "Erro desconhecido.");
-                alert.showAndWait();
-            });
+    downloadTask.setOnFailed(e -> {
+        Throwable ex = downloadTask.getException();
+        ex.printStackTrace();
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Erro na Atualização");
+            alert.setHeaderText("Não foi possível baixar a nova versão.");
+            alert.setContentText(ex != null ? ex.getMessage() : "Erro desconhecido.");
+            alert.showAndWait();
         });
+    });
 
-        new Thread(downloadTask).start();
-    }
+    new Thread(downloadTask).start();
+}
 
     private String extrairValorJson(String json, String chave) {
         try {
