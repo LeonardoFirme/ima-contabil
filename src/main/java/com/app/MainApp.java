@@ -49,7 +49,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.0.7";
+    private static final String VERSAO_ATUAL = "1.0.6";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -897,11 +897,22 @@ public class MainApp extends Application {
         Task<String[]> task = new Task<>() {
             @Override
             protected String[] call() throws Exception {
-                HttpResult response = enviarRequisicaoJson(GITHUB_VERSION_URL, "GET", null);
-                if (response.statusCode == 200) {
-                    String versaoRemota = extrairValorJson(response.body, "versao");
-                    String urlDownload = extrairValorJson(response.body, "urlDownload");
-                    return new String[]{versaoRemota, urlDownload};
+                try {
+                    HttpResult response = enviarRequisicaoJson(GITHUB_VERSION_URL, "GET", null);
+                    if (response.statusCode == 200) {
+                        com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(response.body).getAsJsonObject();
+                        String versaoRemota = obj.has("versao") ? obj.get("versao").getAsString() : null;
+                        String urlDownload = obj.has("urlDownload") ? obj.get("urlDownload").getAsString() : null;
+
+                        if (versaoRemota != null && urlDownload != null) {
+                            return new String[]{versaoRemota, urlDownload};
+                        }
+                    } else {
+                        System.out.println("Verificação silenciosa falhou com HTTP status: " + response.statusCode);
+                    }
+                } catch (Exception ex) {
+                    System.out.println("Erro na verificação silenciosa de atualização:");
+                    ex.printStackTrace();
                 }
                 return null;
             }
@@ -909,8 +920,14 @@ public class MainApp extends Application {
 
         task.setOnSucceeded(e -> {
             String[] resultado = task.getValue();
-            if (resultado != null && resultado[0] != null && !resultado[0].equals(VERSAO_ATUAL)) {
-                Platform.runLater(() -> exibirNotificacaoAtualizacao(resultado[0], resultado[1], ownerStage));
+            if (resultado != null && resultado[0] != null) {
+                String versaoRemota = resultado[0];
+                String urlDownload = resultado[1];
+
+                // Compara as versões (ex: se a remota for diferente da atual)
+                if (!versaoRemota.equals(VERSAO_ATUAL)) {
+                    Platform.runLater(() -> exibirNotificacaoAtualizacao(versaoRemota, urlDownload, ownerStage));
+                }
             }
         });
 
