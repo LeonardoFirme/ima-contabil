@@ -23,6 +23,8 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -41,7 +43,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.text.NumberFormat;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -49,7 +52,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.0.9";
+    private static final String VERSAO_ATUAL = "1.1.0";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -81,6 +84,8 @@ public class MainApp extends Application {
     @Override
     public void init() throws Exception {
         super.init();
+        // Define explicitamente o padrão brasileiro antes de carregar qualquer componente
+        Locale.setDefault(Locale.of("pt", "BR"));
         BackendInitializer.startBackend();
     }
 
@@ -308,119 +313,110 @@ public class MainApp extends Application {
                     String nomeArquivo = file.getName().toLowerCase();
                     lblTituloApp.setText("Arquivo: " + file.getName());
 
+                    // Instancia o formatador monetário estritamente no padrão brasileiro (ponto no milhar, vírgula no decimal)
+                    DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.of("pt", "BR"));
+                    symbols.setDecimalSeparator(',');
+                    symbols.setGroupingSeparator('.');
+                    DecimalFormat df = new DecimalFormat("#,##0.00", symbols);
+
                     if (nomeArquivo.endsWith(".xls") || nomeArquivo.endsWith(".xlsx")) {
                         try (Workbook workbook = WorkbookFactory.create(file)) {
                             Sheet sheet = workbook.getSheetAt(0);
-                            DataFormatter formatter = new DataFormatter();
-                            NumberFormat nf = NumberFormat.getInstance(new Locale("pt", "BR"));
-                            nf.setMinimumFractionDigits(2);
-                            nf.setMaximumFractionDigits(2);
+                            DataFormatter formatter = new DataFormatter(Locale.of("pt", "BR"));
 
-                            boolean isExtratoBancario = false;
-                            boolean isDre = false;
-                            int rowIndex = 0;
-
-                            for (Row row : sheet) {
-                                if (row == null) continue;
-                                String pCell = formatter.formatCellValue(row.getCell(0)).toLowerCase();
-                                String sCell = row.getCell(1) != null ? formatter.formatCellValue(row.getCell(1)).toLowerCase() : "";
-
-                                if (pCell.contains("demonstração do resultado") || pCell.contains("receita bruta") || pCell.contains("deduções")) {
-                                    isDre = true;
-                                    break;
+                            // Detecta o layout analisando o cabeçalho/primeiras linhas
+                            boolean isFinancas = false;
+                            for (int rIdx = 0; rIdx < Math.min(sheet.getLastRowNum(), 5); rIdx++) {
+                                Row rowCheck = sheet.getRow(rIdx);
+                                if (rowCheck != null) {
+                                    for (Cell c : rowCheck) {
+                                        String val = formatter.formatCellValue(c).toLowerCase();
+                                        if (val.contains("conta corrente") || val.contains("valor (r$)") || val.contains("movimentação")) {
+                                            isFinancas = true;
+                                            break;
+                                        }
+                                    }
                                 }
-                                if (pCell.contains("situação") || sCell.contains("data") || pCell.contains("histórico")) {
-                                    isExtratoBancario = true;
-                                    break;
-                                }
-                                rowIndex++;
-                                if (rowIndex > 15) break;
+                                if (isFinancas) break;
                             }
 
                             for (Row row : sheet) {
                                 if (row == null || row.getPhysicalNumberOfCells() == 0) continue;
 
-                                String desc = "";
-                                String saldoVal = "";
-                                String saldoAntVal = "";
+                                if (isFinancas) {
+                                    // Layout de Finanças / Extrato (Coluna 2 = Descrição, Coluna 5 = Valor, Coluna 6 = Saldo)
+                                    Cell cellDesc = row.getCell(2);
+                                    Cell cellValor = row.getCell(5);
+                                    Cell cellSaldo = row.getCell(6);
 
-                                if (isDre) {
-                                    List<String> partesDesc = new ArrayList<>();
-                                    for (int i = 0; i < row.getLastCellNum(); i++) {
-                                        String val = formatter.formatCellValue(row.getCell(i)).trim();
-                                        if (val.isEmpty()) continue;
+                                    String desc = cellDesc != null ? extrairValorCelularRobust(cellDesc, formatter).trim() : "";
+                                    String valorStr = cellValor != null ? extrairValorCelularRobust(cellValor, formatter).trim() : "";
+                                    String saldoStr = cellSaldo != null ? extrairValorCelularRobust(cellSaldo, formatter).trim() : "";
 
-                                        if (isValorMonetarioEstrito(val)) {
-                                            if (saldoVal.isEmpty()) {
-                                                saldoVal = formatarValorMonetario(val, nf);
-                                            } else if (saldoAntVal.isEmpty()) {
-                                                saldoAntVal = formatarValorMonetario(val, nf);
-                                            }
-                                        } else {
-                                            partesDesc.add(val);
-                                        }
-                                    }
-                                    desc = String.join(" - ", partesDesc);
-                                } else if (isExtratoBancario) {
-                                    String data = row.getCell(1) != null ? formatter.formatCellValue(row.getCell(1)).trim() : "";
-                                    String favorecido = row.getCell(2) != null ? formatter.formatCellValue(row.getCell(2)).trim() : "";
-                                    String categoria = row.getCell(4) != null ? formatter.formatCellValue(row.getCell(4)).trim() : "";
-                                    String valor = row.getCell(5) != null ? formatter.formatCellValue(row.getCell(5)).trim() : "";
-                                    String saldo = row.getCell(6) != null ? formatter.formatCellValue(row.getCell(6)).trim() : "";
-
-                                    if (data.equalsIgnoreCase("data") || favorecido.toLowerCase().contains("cliente ou fornecedor")) {
+                                    if (desc.isEmpty() || desc.equalsIgnoreCase("cliente ou fornecedor") || desc.equalsIgnoreCase("descrição")) {
                                         continue;
                                     }
 
-                                    if (!data.isEmpty() || !favorecido.isEmpty()) {
-                                        StringBuilder sb = new StringBuilder();
-                                        if (!data.isEmpty()) sb.append(data);
-                                        if (!favorecido.isEmpty()) sb.append(" - ").append(favorecido);
-                                        if (!categoria.isEmpty() && !categoria.contains("%")) sb.append(" - ").append(categoria);
+                                    String saldoFormatado = formatarValorMonetario(valorStr, df);
+                                    String saldoAntFormatado = formatarValorMonetario(saldoStr, df);
 
-                                        desc = sb.toString().trim();
-                                        if (!valor.isEmpty()) {
-                                            saldoVal = formatarValorMonetario(valor, nf);
-                                        }
-                                        if (!saldo.isEmpty()) {
-                                            saldoAntVal = formatarValorMonetario(saldo, nf);
-                                        }
+                                    if (!desc.isEmpty()) {
+                                        dataList.add(new RowData(desc, saldoFormatado, saldoAntFormatado));
                                     }
                                 } else {
-                                    List<String> celulasPreenchidas = new ArrayList<>();
-                                    int lastCell = row.getLastCellNum();
+                                    // Layout DRE / Balancete
+                                    String desc = "";
+                                    String saldoVal = "";
+                                    String saldoAntVal = "";
 
-                                    for (int i = 0; i < lastCell; i++) {
-                                        String val = formatter.formatCellValue(row.getCell(i)).trim();
-                                        if (!val.isEmpty()) {
-                                            celulasPreenchidas.add(val);
+                                    Cell cellDesc0 = row.getCell(0);
+                                    Cell cellDesc2 = row.getCell(2);
+                                    Cell cellSaldoDRE = row.getCell(8);
+                                    Cell cellSaldoAntDRE = row.getCell(11);
+
+                                    if (cellSaldoDRE != null || cellSaldoAntDRE != null) {
+                                        String d0 = cellDesc0 != null ? extrairValorCelularRobust(cellDesc0, formatter).trim() : "";
+                                        String d2 = cellDesc2 != null ? extrairValorCelularRobust(cellDesc2, formatter).trim() : "";
+                                        desc = !d0.isEmpty() ? d0 : d2;
+
+                                        if (cellSaldoDRE != null) {
+                                            saldoVal = formatarValorMonetario(extrairValorCelularRobust(cellSaldoDRE, formatter), df);
                                         }
-                                    }
+                                        if (cellSaldoAntDRE != null) {
+                                            saldoAntVal = formatarValorMonetario(extrairValorCelularRobust(cellSaldoAntDRE, formatter), df);
+                                        }
+                                    } else {
+                                        // Varredura genérica para outros tipos de planilhas
+                                        List<String> valoresEncontrados = new ArrayList<>();
+                                        List<String> textosDescricao = new ArrayList<>();
 
-                                    if (celulasPreenchidas.isEmpty()) continue;
+                                        for (int i = 0; i < row.getLastCellNum(); i++) {
+                                            Cell cell = row.getCell(i);
+                                            if (cell == null) continue;
+                                            String val = extrairValorCelularRobust(cell, formatter).trim();
+                                            if (val.isEmpty()) continue;
 
-                                    List<String> textosDescricao = new ArrayList<>();
-                                    for (String textoCelula : celulasPreenchidas) {
-                                        String textoLimpo = textoCelula.replace("\n", " ").replace("\r", " ").trim();
-                                        if (isValorMonetarioEstrito(textoLimpo)) {
-                                            if (saldoVal.isEmpty()) {
-                                                saldoVal = formatarValorMonetario(textoLimpo, nf);
-                                            } else if (saldoAntVal.isEmpty()) {
-                                                saldoAntVal = formatarValorMonetario(textoLimpo, nf);
+                                            if (isValorMonetarioEstrito(val)) {
+                                                valoresEncontrados.add(val);
                                             } else {
-                                                textosDescricao.add(textoLimpo);
+                                                textosDescricao.add(val);
                                             }
-                                        } else {
-                                            textosDescricao.add(textoLimpo);
+                                        }
+
+                                        desc = String.join(" - ", textosDescricao);
+                                        if (!valoresEncontrados.isEmpty()) {
+                                            saldoVal = formatarValorMonetario(valoresEncontrados.get(0), df);
+                                            if (valoresEncontrados.size() > 1) {
+                                                saldoAntVal = formatarValorMonetario(valoresEncontrados.get(1), df);
+                                            }
                                         }
                                     }
-                                    desc = String.join(" - ", textosDescricao);
-                                }
 
-                                if (!desc.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
-                                    String dUpper = desc.toUpperCase();
-                                    if (!dUpper.contains("EMPRESA:") && !dUpper.contains("C.N.P.J.") && !dUpper.contains("PERÍODO:")) {
-                                        dataList.add(new RowData(desc, saldoVal, saldoAntVal));
+                                    if (!desc.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
+                                        String dUpper = desc.toUpperCase();
+                                        if (!dUpper.contains("EMPRESA:") && !dUpper.contains("C.N.P.J.") && !dUpper.contains("PERÍODO:") && !dUpper.contains("INSC. JUNTA") && !dUpper.equals("DESCRIÇÃO")) {
+                                            dataList.add(new RowData(desc, saldoVal, saldoAntVal));
+                                        }
                                     }
                                 }
                             }
@@ -435,8 +431,8 @@ public class MainApp extends Application {
                             if (colunas.length >= 3) {
                                 dataList.add(new RowData(
                                     colunas[0].trim(),
-                                    formatarValorMonetario(colunas[1].trim(), NumberFormat.getInstance(new Locale("pt", "BR"))),
-                                    formatarValorMonetario(colunas[2].trim(), NumberFormat.getInstance(new Locale("pt", "BR")))
+                                    formatarValorMonetario(colunas[1].trim(), df),
+                                    formatarValorMonetario(colunas[2].trim(), df)
                                 ));
                             } else {
                                 dataList.add(new RowData(colunas[0].trim(), "", ""));
@@ -827,16 +823,7 @@ public class MainApp extends Application {
 
     private HttpResult enviarRequisicaoJson(String urlStr, String metodo, String jsonBody) throws Exception {
         URL url = URI.create(urlStr).toURL();
-        javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
-
-        javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLSv1.3");
-        try {
-            sc.init(null, null, new java.security.SecureRandom());
-        } catch (Exception e) {
-            sc = javax.net.ssl.SSLContext.getInstance("TLSv1.2");
-            sc.init(null, null, new java.security.SecureRandom());
-        }
-        conn.setSSLSocketFactory(sc.getSocketFactory());
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
         conn.setRequestMethod(metodo);
         conn.setConnectTimeout(5000);
@@ -871,16 +858,7 @@ public class MainApp extends Application {
 
     private void baixarArquivoHttp(String urlStr, File destino) throws Exception {
         URL url = URI.create(urlStr).toURL();
-        javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
-
-        javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLSv1.3");
-        try {
-            sc.init(null, null, new java.security.SecureRandom());
-        } catch (Exception e) {
-            sc = javax.net.ssl.SSLContext.getInstance("TLSv1.2");
-            sc.init(null, null, new java.security.SecureRandom());
-        }
-        conn.setSSLSocketFactory(sc.getSocketFactory());
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
         conn.setInstanceFollowRedirects(true);
         conn.setConnectTimeout(10000);
@@ -1077,32 +1055,53 @@ public class MainApp extends Application {
     private boolean isValorMonetarioEstrito(String texto) {
         if (texto == null || texto.trim().isEmpty()) return false;
         String t = texto.trim();
-
-        if (t.matches(".*[A-Za-zÀ-ÿ].*") || t.contains("%")) {
-            return false;
-        }
-
         t = t.replace("R$", "").replace("(", "").replace(")", "").trim();
-
         return t.matches("^-?\\d{1,3}(\\.\\d{3})*,\\d{2}$") ||
                t.matches("^-?\\d+([.,]\\d+)?$");
     }
 
-    private String formatarValorMonetario(String valorStr, NumberFormat nf) {
+    private String extrairValorCelularRobust(Cell cell, DataFormatter formatter) {
+        if (cell == null) return "";
+        try {
+            if (cell.getCellType() == CellType.NUMERIC) {
+                double val = cell.getNumericCellValue();
+                // Retorna o valor numérico puro no formato internacional (ex: 23475318.44)
+                return String.format(Locale.US, "%.2f", val);
+            } else if (cell.getCellType() == CellType.FORMULA) {
+                try {
+                    if (cell.getCachedFormulaResultType() == CellType.NUMERIC) {
+                        return String.format(Locale.US, "%.2f", cell.getNumericCellValue());
+                    }
+                } catch (Exception ignored) {}
+            }
+            return formatter.formatCellValue(cell).trim();
+        } catch (Exception e) {
+            return formatter.formatCellValue(cell).trim();
+        }
+    }
+
+    private String formatarValorMonetario(String valorStr, DecimalFormat df) {
         if (valorStr == null || valorStr.trim().isEmpty()) return "";
         try {
             String limpo = valorStr.trim();
             boolean isNegativo = limpo.startsWith("(") && limpo.endsWith(")");
 
             limpo = limpo.replace("(", "").replace(")", "").replace("R$", "").trim();
-            limpo = limpo.replace(".", "").replace(",", ".");
 
-            double num = Double.parseDouble(limpo);
-            if (isNegativo) {
+            double num;
+            // Identifica se a string tem vírgula (padrão brasileiro: 23.475.318,44) ou apenas ponto decimal (padrão US/POI: 23475318.44)
+            if (limpo.contains(",")) {
+                limpo = limpo.replace(".", "").replace(",", ".");
+                num = Double.parseDouble(limpo);
+            } else {
+                num = Double.parseDouble(limpo);
+            }
+
+            if (isNegativo && num > 0) {
                 num = -num;
             }
 
-            String formatado = nf.format(Math.abs(num));
+            String formatado = df.format(Math.abs(num));
             return (num < 0 ? "-R$ " : "R$ ") + formatado;
         } catch (Exception e) {
             return valorStr;

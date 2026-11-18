@@ -22,13 +22,26 @@ public class BackendInitializer {
             File jarFile = new File(path);
             File currentDir = jarFile.getParentFile();
 
+            // Localiza o backend.exe no diretório atual ou sobe um nível caso esteja na subpasta /app ou /lib do jpackage
             File backendExe = new File(currentDir, "backend.exe");
+            if (!backendExe.exists() && currentDir.getName().equalsIgnoreCase("app")) {
+                currentDir = currentDir.getParentFile();
+                backendExe = new File(currentDir, "backend.exe");
+            }
+            if (!backendExe.exists() && new File(currentDir, "../backend.exe").exists()) {
+                currentDir = new File(currentDir, "..").getCanonicalFile();
+                backendExe = new File(currentDir, "backend.exe");
+            }
+
             if (!backendExe.exists()) {
                 throw new IllegalStateException("Binário do backend não localizado no diretório de instalação: " + backendExe.getAbsolutePath());
             }
 
+            // CORREÇÃO CRÍTICA PARA PRODUÇÃO:
+            // Se o backend.exe estiver empacotado na raiz do app (jpackage), o diretório de trabalho
+            // deve ser o diretório onde o backend.exe realmente reside para que o SQLite salve o banco localmente.
             ProcessBuilder pb = new ProcessBuilder(backendExe.getAbsolutePath());
-            pb.directory(currentDir);
+            pb.directory(backendExe.getParentFile());
             pb.redirectErrorStream(true);
 
             backendProcess = pb.start();
@@ -71,7 +84,6 @@ public class BackendInitializer {
 
     private static void killExistingBackendProcess() {
         try {
-            // Comando para encerrar forçadamente qualquer processo backend.exe anterior no Windows
             ProcessBuilder killPb = new ProcessBuilder("taskkill", "/F", "/IM", "backend.exe");
             killPb.redirectErrorStream(true);
             Process p = killPb.start();
