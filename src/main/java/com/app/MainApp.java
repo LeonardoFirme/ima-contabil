@@ -784,12 +784,8 @@ public class MainApp extends Application {
         });
 
         task.setOnFailed(e -> {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.initOwner(ownerStage);
-            alert.setTitle("Erro de Conexão");
-            alert.setHeaderText("Não foi possível verificar atualizações.");
-            alert.setContentText("Verifique sua conexão com a internet. Detalhe: " + task.getException().getMessage());
-            alert.showAndWait();
+            System.err.println("Erro detalhado: " + task.getException().getMessage());
+            task.getException().printStackTrace();
         });
 
         new Thread(task).start();
