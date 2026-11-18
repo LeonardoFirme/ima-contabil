@@ -6,7 +6,7 @@
 
     <groupId>com.app</groupId>
     <artifactId>desktop</artifactId>
-    <version>1.0.8</version>
+    <version>1.0.9</version>
     <packaging>jar</packaging>
 
     <name>IMA Contábil Desktop</name>
