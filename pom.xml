@@ -13,6 +13,7 @@
         <javafx.version>21</javafx.version>
         <poi.version>5.2.5</poi.version>
         <log4j.version>2.22.0</log4j.version>
+        <gson.version>2.10.1</gson.version>
     </properties>
 
     <dependencies>
@@ -45,6 +46,11 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
         </dependency>
     </dependencies>
 

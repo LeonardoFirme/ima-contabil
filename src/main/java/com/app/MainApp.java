@@ -42,11 +42,8 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
-/**
- * IMA Contábil - Desktop Lite
- * Classe principal responsável pela interface gráfica e lógica de negócio local.
- */
 public class MainApp extends Application {
 
     private static final String VERSAO_ATUAL = "1.0.0";
@@ -757,14 +754,7 @@ public class MainApp extends Application {
         task.setOnSucceeded(e -> {
             String[] resultado = task.getValue();
             if (resultado != null && resultado[0] != null && !resultado[0].equals(VERSAO_ATUAL)) {
-                Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                    alert.initOwner(ownerStage);
-                    alert.setTitle("Nova Versão Disponível");
-                    alert.setHeaderText("Existe uma atualização para a versão v" + resultado[0]);
-                    alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ".\nAcesse o repositório do projeto para baixar a nova versão.");
-                    alert.showAndWait();
-                });
+                Platform.runLater(() -> exibirNotificacaoAtualizacao(resultado[0], resultado[1], ownerStage));
             }
         });
 
@@ -802,21 +792,10 @@ public class MainApp extends Application {
         task.setOnSucceeded(e -> {
             String[] resultado = task.getValue();
             String versaoRemota = resultado[0];
+            String urlDownload = resultado[1];
 
             if (!versaoRemota.equals(VERSAO_ATUAL)) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.initOwner(ownerStage);
-                alert.setTitle("Nova Versão Disponível");
-                alert.setHeaderText("Existe uma atualização para a versão v" + versaoRemota);
-                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ".\nAcesse o GitHub para efetuar o download da nova versão.");
-                alert.showAndWait();
-            } else {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.initOwner(ownerStage);
-                alert.setTitle("Sistema Atualizado");
-                alert.setHeaderText(null);
-                alert.setContentText("Você já está utilizando a versão mais recente (" + VERSAO_ATUAL + ").");
-                alert.showAndWait();
+                Platform.runLater(() -> exibirNotificacaoAtualizacao(versaoRemota, urlDownload, ownerStage));
             }
         });
 
@@ -830,6 +809,65 @@ public class MainApp extends Application {
         });
 
         new Thread(task).start();
+    }
+
+    private void exibirNotificacaoAtualizacao(String versaoRemota, String urlMsi, Stage ownerStage) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(ownerStage);
+        alert.setTitle("Nova Atualização Disponível");
+        alert.setHeaderText("A versão v" + versaoRemota + " está disponível.");
+        alert.setContentText("Deseja realizar a atualização agora?");
+
+        ButtonType btnSim = new ButtonType("Sim", ButtonBar.ButtonData.YES);
+        ButtonType btnNao = new ButtonType("Não", ButtonBar.ButtonData.NO);
+        alert.getButtonTypes().setAll(btnSim, btnNao);
+
+        Optional<ButtonType> resultado = alert.showAndWait();
+        if (resultado.isPresent() && resultado.get() == btnSim) {
+            baixarEInstalar(urlMsi, ownerStage);
+        }
+    }
+
+    private void baixarEInstalar(String urlMsi, Stage ownerStage) {
+        Task<File> downloadTask = new Task<>() {
+            @Override
+            protected File call() throws Exception {
+                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(urlMsi))
+                        .header("Accept", "application/octet-stream")
+                        .GET();
+
+                if (GITHUB_PAT_TOKEN != null && !GITHUB_PAT_TOKEN.isEmpty()) {
+                    reqBuilder.header("Authorization", "Bearer " + GITHUB_PAT_TOKEN);
+                }
+
+                File tempFile = new File(System.getProperty("java.io.tmpdir"), "ima-contabil-update.msi");
+                HttpResponse<InputStream> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
+
+                if (response.statusCode() == 200) {
+                    Files.copy(response.body(), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    return tempFile;
+                }
+                throw new Exception("HTTP " + response.statusCode());
+            }
+        };
+
+        downloadTask.setOnSucceeded(e -> {
+            File arquivoMsi = downloadTask.getValue();
+            Platform.runLater(() -> {
+                try {
+                    ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", arquivoMsi.getAbsolutePath(), "/quiet", "/norestart");
+                    pb.start();
+                    Platform.exit();
+                    System.exit(0);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+        });
+
+        new Thread(downloadTask).start();
     }
 
     private String extrairValorJson(String json, String chave) {
