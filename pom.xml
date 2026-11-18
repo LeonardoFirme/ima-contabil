@@ -108,7 +108,7 @@
                 <version>1.6.0</version>
                 <configuration>
                     <name>IMA Contábil</name>
-                    <appVersion>1.0.4</appVersion>
+                    <appVersion>1.0.5</appVersion>
                     <vendor>Leonardo Firme</vendor>
                     <icon>logo.ico</icon>
                     <type>MSI</type>
@@ -118,7 +118,8 @@
                     <mainClass>com.app.Main</mainClass>
                     <winShortcut>true</winShortcut>
                     <winMenu>true</winMenu>
-                    <winConsole>false</winConsole> <!-- Alterado para false -->
+                    <winConsole>false</winConsole>
+                    <!-- O UUID deve permanecer idêntico em todas as versões para permitir o upgrade automático -->
                     <winUpgradeUuid>F1234567-89AB-CDEF-0123-456789ABCDEF</winUpgradeUuid>
                 </configuration>
             </plugin>
