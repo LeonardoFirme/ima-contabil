@@ -49,7 +49,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.0.6";
+    private static final String VERSAO_ATUAL = "1.0.7";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -201,7 +201,7 @@ public class MainApp extends Application {
 
         Pane overlay = new Pane();
         overlay.setStyle("-fx-background-color: rgba(0, 0, 0, 0.55);");
-        overlay.setPrefSize(1024, 768);
+        overlay.setPrefSize(800, 500);
 
         StackPane welcomeLayout = new StackPane();
         ImageView bgImageView = new ImageView();
@@ -218,7 +218,7 @@ public class MainApp extends Application {
 
         welcomeLayout.getChildren().addAll(bgImageView, overlay, contentBox);
 
-        Scene scene = new Scene(welcomeLayout, 1024, 768);
+        Scene scene = new Scene(welcomeLayout, 800, 500);
         welcomeStage.setScene(scene);
         welcomeStage.centerOnScreen();
         welcomeStage.show();
