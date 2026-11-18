@@ -844,6 +844,7 @@ public class MainApp extends Application {
                 HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
                 HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                         .uri(URI.create(urlDownload))
+                        .header("Accept", "application/octet-stream")
                         .GET();
 
                 if (GITHUB_PAT_TOKEN != null && !GITHUB_PAT_TOKEN.isEmpty()) {
