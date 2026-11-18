@@ -796,6 +796,15 @@ public class MainApp extends Application {
 
             if (!versaoRemota.equals(VERSAO_ATUAL)) {
                 Platform.runLater(() -> exibirNotificacaoAtualizacao(versaoRemota, urlDownload, ownerStage));
+            } else {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.initOwner(ownerStage);
+                    alert.setTitle("Sistema Atualizado");
+                    alert.setHeaderText(null);
+                    alert.setContentText("Você já está utilizando a versão mais recente (" + VERSAO_ATUAL + ").");
+                    alert.showAndWait();
+                });
             }
         });
 
@@ -811,59 +820,83 @@ public class MainApp extends Application {
         new Thread(task).start();
     }
 
-    private void exibirNotificacaoAtualizacao(String versaoRemota, String urlMsi, Stage ownerStage) {
+    private void exibirNotificacaoAtualizacao(String versaoRemota, String urlDownload, Stage ownerStage) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.initOwner(ownerStage);
         alert.setTitle("Nova Atualização Disponível");
         alert.setHeaderText("A versão v" + versaoRemota + " está disponível.");
         alert.setContentText("Deseja realizar a atualização agora?");
 
-        ButtonType btnSim = new ButtonType("Sim", ButtonBar.ButtonData.YES);
-        ButtonType btnNao = new ButtonType("Não", ButtonBar.ButtonData.NO);
+        ButtonType btnSim = new ButtonType("Sim", ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnNao = new ButtonType("Não", ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(btnSim, btnNao);
 
         Optional<ButtonType> resultado = alert.showAndWait();
         if (resultado.isPresent() && resultado.get() == btnSim) {
-            baixarEInstalar(urlMsi, ownerStage);
+            baixarEAtualizarJar(urlDownload, ownerStage);
         }
     }
 
-    private void baixarEInstalar(String urlMsi, Stage ownerStage) {
+    private void baixarEAtualizarJar(String urlDownload, Stage ownerStage) {
         Task<File> downloadTask = new Task<>() {
             @Override
             protected File call() throws Exception {
                 HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
                 HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
-                        .uri(URI.create(urlMsi))
-                        .header("Accept", "application/octet-stream")
+                        .uri(URI.create(urlDownload))
                         .GET();
 
                 if (GITHUB_PAT_TOKEN != null && !GITHUB_PAT_TOKEN.isEmpty()) {
                     reqBuilder.header("Authorization", "Bearer " + GITHUB_PAT_TOKEN);
                 }
 
-                File tempFile = new File(System.getProperty("java.io.tmpdir"), "ima-contabil-update.msi");
+                File tempJar = new File(System.getProperty("java.io.tmpdir"), "ima-contabil-novo.jar");
                 HttpResponse<InputStream> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofInputStream());
 
                 if (response.statusCode() == 200) {
-                    Files.copy(response.body(), tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    return tempFile;
+                    Files.copy(response.body(), tempJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    return tempJar;
                 }
-                throw new Exception("HTTP " + response.statusCode());
+                throw new Exception("Falha no download. HTTP: " + response.statusCode());
             }
         };
 
         downloadTask.setOnSucceeded(e -> {
-            File arquivoMsi = downloadTask.getValue();
+            File novoJar = downloadTask.getValue();
             Platform.runLater(() -> {
                 try {
-                    ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", arquivoMsi.getAbsolutePath(), "/quiet", "/norestart");
-                    pb.start();
+                    File jarAtual = new File(MainApp.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+
+                    File batFile = new File(System.getProperty("java.io.tmpdir"), "atualizar.bat");
+                    String conteudoBat =
+                        "@echo off\n" +
+                        "timeout /t 2 /nobreak > nul\n" +
+                        "copy /y \"" + novoJar.getAbsolutePath() + "\" \"" + jarAtual.getAbsolutePath() + "\"\n" +
+                        "start \"\" java --module-path target --add-modules javafx.controls,javafx.fxml -jar \"" + jarAtual.getAbsolutePath() + "\"\n" +
+                        "del \"%~f0\"\n";
+
+                    Files.writeString(batFile.toPath(), conteudoBat, StandardCharsets.UTF_8);
+
+                    new ProcessBuilder("cmd.exe", "/c", batFile.getAbsolutePath()).start();
+
                     Platform.exit();
                     System.exit(0);
+
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
+            });
+        });
+
+        downloadTask.setOnFailed(e -> {
+            Throwable ex = downloadTask.getException();
+            ex.printStackTrace();
+            Platform.runLater(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Erro na Atualização");
+                alert.setHeaderText("Não foi possível baixar a nova versão.");
+                alert.setContentText(ex != null ? ex.getMessage() : "Erro desconhecido.");
+                alert.showAndWait();
             });
         });
 
