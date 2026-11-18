@@ -118,7 +118,7 @@
                     <mainClass>com.app.Main</mainClass>
                     <winShortcut>true</winShortcut>
                     <winMenu>true</winMenu>
-                    <winConsole>true</winConsole>
+                    <winConsole>false</winConsole> <!-- Alterado para false -->
                     <winUpgradeUuid>F1234567-89AB-CDEF-0123-456789ABCDEF</winUpgradeUuid>
                 </configuration>
             </plugin>
