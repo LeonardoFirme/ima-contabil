@@ -49,7 +49,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.0.6";
+    private static final String VERSAO_ATUAL = "1.0.8";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -809,7 +809,7 @@ public class MainApp extends Application {
         URL url = URI.create(urlStr).toURL();
         javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
 
-        // Força o uso de TLS moderno para evitar handshakes falhos com o GitHub
+        // Força o uso de TLS moderno para evitar o handshake_failure com o GitHub
         javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLSv1.3");
         try {
             sc.init(null, null, new java.security.SecureRandom());
