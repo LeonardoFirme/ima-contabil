@@ -108,7 +108,7 @@
                 <version>1.6.0</version>
                 <configuration>
                     <name>IMA Contábil</name>
-                    <appVersion>1.0.3</appVersion>
+                    <appVersion>1.0.4</appVersion>
                     <vendor>Leonardo Firme</vendor>
                     <icon>logo.ico</icon>
                     <type>MSI</type>
