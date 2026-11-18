@@ -846,9 +846,12 @@ public class MainApp extends Application {
                 HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
                 if (response.statusCode() == 200) {
-                    File tempJar = new File(System.getProperty("java.io.tmpdir"), "desktop-1.0-SNAPSHOT.jar");
-                    Files.copy(response.body(), tempJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    return tempJar;
+                    // Salva diretamente na pasta Downloads do usuário
+                    File pastaDownloads = new File(System.getProperty("user.home"), "Downloads");
+                    File installerFile = new File(pastaDownloads, "ima-contabil-update.msi");
+
+                    Files.copy(response.body(), installerFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    return installerFile;
                 }
 
                 throw new Exception("Falha no download. HTTP: " + response.statusCode());
@@ -856,29 +859,11 @@ public class MainApp extends Application {
         };
 
         downloadTask.setOnSucceeded(e -> {
-            File novoJar = downloadTask.getValue();
+            File installerFile = downloadTask.getValue();
             Platform.runLater(() -> {
                 try {
-                    File jarAtual = new File(MainApp.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-                    File batFile = new File(System.getProperty("java.io.tmpdir"), "atualizar.bat");
-
-                    String conteudoBat =
-                        "@echo off\n" +
-                        "chcp 65001 > nul\n" +
-                        "echo Atualizando o sistema, aguarde...\n" +
-                        ":loop\n" +
-                        "tasklist /fi \"imagename eq java.exe\" | find.exe /i \"java.exe\" > nul\n" +
-                        "if not errorlevel 1 (\n" +
-                        "    timeout /t 1 /nobreak > nul\n" +
-                        "    goto loop\n" +
-                        ")\n" +
-                        "move /y \"" + novoJar.getAbsolutePath() + "\" \"" + jarAtual.getAbsolutePath() + "\"\n" +
-                        "start \"\" java --module-path target --add-modules javafx.controls,javafx.fxml -jar \"" + jarAtual.getAbsolutePath() + "\"\n" +
-                        "del \"%~f0\"\n";
-
-                    Files.writeString(batFile.toPath(), conteudoBat, StandardCharsets.UTF_8);
-                    new ProcessBuilder("cmd.exe", "/c", batFile.getAbsolutePath()).start();
-
+                    // Executa o instalador msi nativo do Windows e fecha o app
+                    java.awt.Desktop.getDesktop().open(installerFile);
                     Platform.exit();
                     System.exit(0);
                 } catch (Exception ex) {
@@ -893,7 +878,7 @@ public class MainApp extends Application {
             Platform.runLater(() -> {
                 Alert alert = new Alert(Alert.AlertType.ERROR);
                 alert.setTitle("Erro na Atualização");
-                alert.setHeaderText("Não foi possível baixar a nova versão.");
+                alert.setHeaderText("Não foi possível baixar o instalador.");
                 alert.setContentText(ex != null ? ex.getMessage() : "Erro desconhecido.");
                 alert.showAndWait();
             });
