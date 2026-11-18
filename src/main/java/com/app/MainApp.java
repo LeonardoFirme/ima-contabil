@@ -317,17 +317,24 @@ public class MainApp extends Application {
                             nf.setMaximumFractionDigits(2);
 
                             boolean isExtratoBancario = false;
+                            boolean isDre = false;
                             int rowIndex = 0;
+
                             for (Row row : sheet) {
                                 if (row == null) continue;
                                 String pCell = formatter.formatCellValue(row.getCell(0)).toLowerCase();
                                 String sCell = row.getCell(1) != null ? formatter.formatCellValue(row.getCell(1)).toLowerCase() : "";
+
+                                if (pCell.contains("demonstração do resultado") || pCell.contains("receita bruta") || pCell.contains("deduções")) {
+                                    isDre = true;
+                                    break;
+                                }
                                 if (pCell.contains("situação") || sCell.contains("data") || pCell.contains("histórico")) {
                                     isExtratoBancario = true;
                                     break;
                                 }
                                 rowIndex++;
-                                if (rowIndex > 5) break;
+                                if (rowIndex > 15) break;
                             }
 
                             for (Row row : sheet) {
@@ -337,12 +344,29 @@ public class MainApp extends Application {
                                 String saldoVal = "";
                                 String saldoAntVal = "";
 
-                                if (isExtratoBancario) {
-                                    String data = formatter.formatCellValue(row.getCell(1)).trim();
-                                    String favorecido = formatter.formatCellValue(row.getCell(2)).trim();
-                                    String categoria = formatter.formatCellValue(row.getCell(4)).trim();
-                                    String valor = formatter.formatCellValue(row.getCell(5)).trim();
-                                    String saldo = formatter.formatCellValue(row.getCell(6)).trim();
+                                if (isDre) {
+                                    List<String> partesDesc = new ArrayList<>();
+                                    for (int i = 0; i < row.getLastCellNum(); i++) {
+                                        String val = formatter.formatCellValue(row.getCell(i)).trim();
+                                        if (val.isEmpty()) continue;
+
+                                        if (isValorMonetarioEstrito(val)) {
+                                            if (saldoVal.isEmpty()) {
+                                                saldoVal = formatarValorMonetario(val, nf);
+                                            } else if (saldoAntVal.isEmpty()) {
+                                                saldoAntVal = formatarValorMonetario(val, nf);
+                                            }
+                                        } else {
+                                            partesDesc.add(val);
+                                        }
+                                    }
+                                    desc = String.join(" - ", partesDesc);
+                                } else if (isExtratoBancario) {
+                                    String data = row.getCell(1) != null ? formatter.formatCellValue(row.getCell(1)).trim() : "";
+                                    String favorecido = row.getCell(2) != null ? formatter.formatCellValue(row.getCell(2)).trim() : "";
+                                    String categoria = row.getCell(4) != null ? formatter.formatCellValue(row.getCell(4)).trim() : "";
+                                    String valor = row.getCell(5) != null ? formatter.formatCellValue(row.getCell(5)).trim() : "";
+                                    String saldo = row.getCell(6) != null ? formatter.formatCellValue(row.getCell(6)).trim() : "";
 
                                     if (data.equalsIgnoreCase("data") || favorecido.toLowerCase().contains("cliente ou fornecedor")) {
                                         continue;
@@ -376,7 +400,6 @@ public class MainApp extends Application {
                                     if (celulasPreenchidas.isEmpty()) continue;
 
                                     List<String> textosDescricao = new ArrayList<>();
-
                                     for (String textoCelula : celulasPreenchidas) {
                                         String textoLimpo = textoCelula.replace("\n", " ").replace("\r", " ").trim();
                                         if (isValorMonetarioEstrito(textoLimpo)) {
@@ -391,12 +414,14 @@ public class MainApp extends Application {
                                             textosDescricao.add(textoLimpo);
                                         }
                                     }
-
                                     desc = String.join(" - ", textosDescricao);
                                 }
 
                                 if (!desc.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
-                                    dataList.add(new RowData(desc, saldoVal, saldoAntVal));
+                                    String dUpper = desc.toUpperCase();
+                                    if (!dUpper.contains("EMPRESA:") && !dUpper.contains("C.N.P.J.") && !dUpper.contains("PERÍODO:")) {
+                                        dataList.add(new RowData(desc, saldoVal, saldoAntVal));
+                                    }
                                 }
                             }
                         }
@@ -460,7 +485,6 @@ public class MainApp extends Application {
             btnProcess.setDisable(true);
             String tituloRelatorio = lblTituloApp.getText().replace("Arquivo: ", "");
 
-            // Cópia segura da lista para leitura na thread secundária
             List<RowData> snapshotItens = new ArrayList<>(dataList);
 
             Task<HttpResult> taskProcessamento = new Task<>() {
@@ -791,10 +815,6 @@ public class MainApp extends Application {
         verificarAtualizacaoSilenciosa(primaryStage);
     }
 
-    // =========================================================================
-    // MÉTODOS AUXILIARES HTTP (COMPATÍVEIS COM MÓDULO NATIVO java.base)
-    // =========================================================================
-
     private static class HttpResult {
         final int statusCode;
         final String body;
@@ -809,7 +829,6 @@ public class MainApp extends Application {
         URL url = URI.create(urlStr).toURL();
         javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
 
-        // Força o uso de TLS moderno para evitar o handshake_failure com o GitHub
         javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLSv1.3");
         try {
             sc.init(null, null, new java.security.SecureRandom());
@@ -889,10 +908,6 @@ public class MainApp extends Application {
         }
     }
 
-    // =========================================================================
-    // ATUALIZAÇÃO DO SISTEMA
-    // =========================================================================
-
     private void verificarAtualizacaoSilenciosa(Stage ownerStage) {
         Task<String[]> task = new Task<>() {
             @Override
@@ -907,11 +922,8 @@ public class MainApp extends Application {
                         if (versaoRemota != null && urlDownload != null) {
                             return new String[]{versaoRemota, urlDownload};
                         }
-                    } else {
-                        System.out.println("Verificação silenciosa falhou com HTTP status: " + response.statusCode);
                     }
                 } catch (Exception ex) {
-                    System.out.println("Erro na verificação silenciosa de atualização:");
                     ex.printStackTrace();
                 }
                 return null;
@@ -924,7 +936,6 @@ public class MainApp extends Application {
                 String versaoRemota = resultado[0];
                 String urlDownload = resultado[1];
 
-                // Compara as versões (ex: se a remota for diferente da atual)
                 if (!versaoRemota.equals(VERSAO_ATUAL)) {
                     Platform.runLater(() -> exibirNotificacaoAtualizacao(versaoRemota, urlDownload, ownerStage));
                 }
