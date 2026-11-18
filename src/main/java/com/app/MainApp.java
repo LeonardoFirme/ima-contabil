@@ -201,7 +201,7 @@ public class MainApp extends Application {
 
         Pane overlay = new Pane();
         overlay.setStyle("-fx-background-color: rgba(0, 0, 0, 0.55);");
-        overlay.setPrefSize(800, 500);
+        overlay.setPrefSize(1024, 768);
 
         StackPane welcomeLayout = new StackPane();
         ImageView bgImageView = new ImageView();
@@ -218,7 +218,7 @@ public class MainApp extends Application {
 
         welcomeLayout.getChildren().addAll(bgImageView, overlay, contentBox);
 
-        Scene scene = new Scene(welcomeLayout, 800, 500);
+        Scene scene = new Scene(welcomeLayout, 1024, 768);
         welcomeStage.setScene(scene);
         welcomeStage.centerOnScreen();
         welcomeStage.show();
@@ -780,7 +780,7 @@ public class MainApp extends Application {
         root.setCenter(splitPane);
         root.setBottom(footerBox);
 
-        Scene scene = new Scene(root, 1600, 1200);
+        Scene scene = new Scene(root, 1024, 768);
 
         primaryStage.setScene(scene);
         primaryStage.centerOnScreen();
