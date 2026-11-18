@@ -45,7 +45,7 @@ import java.util.Locale;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.0.1";
+    private static final String VERSAO_ATUAL = "1.0.0";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/leonardofirme/ima-contabil/main/version.json";
     private static final String GITHUB_PAT_TOKEN = "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";
 
@@ -757,14 +757,10 @@ public class MainApp extends Application {
                 alert.initOwner(ownerStage);
                 alert.setTitle("Atualização Disponível");
                 alert.setHeaderText("Nova versão v" + resultado[0] + " disponível!");
-                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja abrir o navegador para baixar a atualização?");
+                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja baixar e atualizar o sistema automaticamente?");
 
                 if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                    try {
-                        java.awt.Desktop.getDesktop().browse(new URI(resultado[1]));
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                    }
+                    executarAtualizacaoAutomatica(resultado[1]);
                 }
             }
         });
@@ -810,14 +806,10 @@ public class MainApp extends Application {
                 alert.initOwner(ownerStage);
                 alert.setTitle("Atualização Disponível");
                 alert.setHeaderText("Nova versão v" + versaoRemota + " disponível!");
-                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja abrir o navegador para baixar a atualização?");
+                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja baixar e atualizar o sistema automaticamente?");
 
                 if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-                    try {
-                        java.awt.Desktop.getDesktop().browse(new URI(urlDownload));
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                    }
+                    executarAtualizacaoAutomatica(urlDownload);
                 }
             } else {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -839,6 +831,40 @@ public class MainApp extends Application {
         });
 
         new Thread(task).start();
+    }
+
+    private void executarAtualizacaoAutomatica(String urlDownload) {
+        Task<Void> downloadTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                String msiUrl = urlDownload.endsWith(".msi") ? urlDownload : "https://github.com/leonardofirme/ima-contabil/releases/latest/download/IMA-Contabil.msi";
+
+                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(msiUrl)).GET().build();
+
+                File tempMsi = new File(System.getProperty("java.io.tmpdir"), "update-ima.msi");
+                HttpResponse<java.nio.file.Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(tempMsi.toPath()));
+
+                if (response.statusCode() == 200 && tempMsi.exists()) {
+                    ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", tempMsi.getAbsolutePath(), "/quiet", "/norestart");
+                    pb.start();
+                    Platform.runLater(() -> System.exit(0));
+                }
+                return null;
+            }
+        };
+
+        downloadTask.setOnFailed(e -> {
+            Platform.runLater(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Erro na Atualização");
+                alert.setHeaderText("Falha ao baixar o instalador.");
+                alert.setContentText(downloadTask.getException().getMessage());
+                alert.showAndWait();
+            });
+        });
+
+        new Thread(downloadTask).start();
     }
 
     private String extrairValorJson(String json, String chave) {

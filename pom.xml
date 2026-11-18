@@ -84,6 +84,7 @@
                     <mainClass>com.app.MainApp</mainClass>
                     <winShortcut>true</winShortcut>
                     <winMenu>true</winMenu>
+                    <winUpgradeUuid>F1234567-89AB-CDEF-0123-456789ABCDEF</winUpgradeUuid>
                     <javaOptions>
                         <option>--module-path</option>
                         <option>$APPDIR</option>
