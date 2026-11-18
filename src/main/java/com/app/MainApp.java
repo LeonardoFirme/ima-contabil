@@ -846,7 +846,6 @@ public class MainApp extends Application {
                 HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
                 if (response.statusCode() == 200) {
-                    // Salva diretamente na pasta Downloads do usuário
                     File pastaDownloads = new File(System.getProperty("user.home"), "Downloads");
                     File installerFile = new File(pastaDownloads, "ima-contabil-update.msi");
 
@@ -862,12 +861,19 @@ public class MainApp extends Application {
             File installerFile = downloadTask.getValue();
             Platform.runLater(() -> {
                 try {
-                    // Executa o instalador msi nativo do Windows e fecha o app
-                    java.awt.Desktop.getDesktop().open(installerFile);
+                    // Força a execução correta do instalador MSI via prompt do Windows (msiexec)
+                    ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", installerFile.getAbsolutePath(), "/qb");
+                    pb.start();
+
                     Platform.exit();
                     System.exit(0);
                 } catch (Exception ex) {
                     ex.printStackTrace();
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Erro ao Executar Instalador");
+                    alert.setHeaderText("Não foi possível iniciar a instalação automática.");
+                    alert.setContentText(ex.getMessage());
+                    alert.showAndWait();
                 }
             });
         });
@@ -879,7 +885,7 @@ public class MainApp extends Application {
                 Alert alert = new Alert(Alert.AlertType.ERROR);
                 alert.setTitle("Erro na Atualização");
                 alert.setHeaderText("Não foi possível baixar o instalador.");
-                alert.setContentText(ex != null ? ex.getMessage() : "Erro desconhecido.");
+                alert.setContentText(ex.getMessage() != null ? ex.getMessage() : "Erro desconhecido.");
                 alert.showAndWait();
             });
         });
