@@ -46,9 +46,11 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.0.5";
+    private static final String VERSAO_ATUAL = "1.0.6";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String GITHUB_PAT_TOKEN = "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";
+
+    private static Process backendProcess;
 
     public static class RowData {
         private final SimpleStringProperty descricao;
@@ -74,6 +76,31 @@ public class MainApp extends Application {
     private Label lblPlaceholderDownloads;
     private VBox placeholderEditorBox;
     private Label lblTituloApp;
+
+    @Override
+    public void init() throws Exception {
+        super.init();
+        try {
+            File currentDir = new File(MainApp.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParentFile();
+            File exeBackend = new File(currentDir, "backend.exe");
+
+            if (exeBackend.exists()) {
+                ProcessBuilder pb = new ProcessBuilder(exeBackend.getAbsolutePath());
+                pb.directory(currentDir);
+                backendProcess = pb.start();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void stop() throws Exception {
+        if (backendProcess != null) {
+            backendProcess.destroyForcibly();
+        }
+        super.stop();
+    }
 
     @Override
     public void start(Stage primaryStage) {
@@ -465,11 +492,18 @@ public class MainApp extends Application {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Erro no Servidor");
                     alert.setHeaderText("Falha ao processar requisição.");
-                    alert.setContentText("Resposta: " + response.body());
+                    alert.setContentText("Código HTTP: " + response.statusCode() + "\nResposta: " + response.body());
                     alert.showAndWait();
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Erro de Conexão com o Backend");
+                    alert.setHeaderText("Não foi possível comunicar com o servidor local.");
+                    alert.setContentText("Verifique se o backend .NET está rodando na porta 5000.\nDetalhe: " + ex.getMessage());
+                    alert.showAndWait();
+                });
             }
         });
 
