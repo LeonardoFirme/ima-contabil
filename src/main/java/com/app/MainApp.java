@@ -807,7 +807,18 @@ public class MainApp extends Application {
 
     private HttpResult enviarRequisicaoJson(String urlStr, String metodo, String jsonBody) throws Exception {
         URL url = URI.create(urlStr).toURL();
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
+
+        // Força o uso de TLS moderno para evitar handshakes falhos com o GitHub
+        javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLSv1.3");
+        try {
+            sc.init(null, null, new java.security.SecureRandom());
+        } catch (Exception e) {
+            sc = javax.net.ssl.SSLContext.getInstance("TLSv1.2");
+            sc.init(null, null, new java.security.SecureRandom());
+        }
+        conn.setSSLSocketFactory(sc.getSocketFactory());
+
         conn.setRequestMethod(metodo);
         conn.setConnectTimeout(5000);
         conn.setReadTimeout(15000);
@@ -841,7 +852,17 @@ public class MainApp extends Application {
 
     private void baixarArquivoHttp(String urlStr, File destino) throws Exception {
         URL url = URI.create(urlStr).toURL();
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
+
+        javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLSv1.3");
+        try {
+            sc.init(null, null, new java.security.SecureRandom());
+        } catch (Exception e) {
+            sc = javax.net.ssl.SSLContext.getInstance("TLSv1.2");
+            sc.init(null, null, new java.security.SecureRandom());
+        }
+        conn.setSSLSocketFactory(sc.getSocketFactory());
+
         conn.setInstanceFollowRedirects(true);
         conn.setConnectTimeout(10000);
         conn.setReadTimeout(30000);
