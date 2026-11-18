@@ -433,34 +433,23 @@ public class MainApp extends Application {
         );
         btnProcess.setOnAction(e -> {
             try {
-                StringBuilder json = new StringBuilder();
-                json.append("{\"titulo\":\"Relatório Contábil Completo\",\"itens\":[");
-                for (int i = 0; i < dataList.size(); i++) {
-                    RowData r = dataList.get(i);
-                    String descSegura = r.getDescricao()
-                            .replace("\t", " ")
-                            .replace("\n", " ")
-                            .replace("\r", " ")
-                            .replace("\"", "\\\"");
-
-                    String saldoSeguro = r.getSaldo()
-                            .replace("\t", "")
-                            .replace("\"", "\\\"");
-
-                    String saldoAntSeguro = r.getSaldoAnterior()
-                            .replace("\t", "")
-                            .replace("\"", "\\\"");
-
-                    json.append(String.format("{\"descricao\":\"%s\",\"saldo\":\"%s\",\"saldoAnterior\":\"%s\"}", descSegura, saldoSeguro, saldoAntSeguro));
-                    if (i < dataList.size() - 1) json.append(",");
+                com.google.gson.JsonObject rootJson = new com.google.gson.JsonObject();
+                rootJson.addProperty("titulo", "Relatório Contábil Completo");
+                com.google.gson.JsonArray itensArray = new com.google.gson.JsonArray();
+                for (RowData r : dataList) {
+                    com.google.gson.JsonObject itemObj = new com.google.gson.JsonObject();
+                    itemObj.addProperty("descricao", r.getDescricao());
+                    itemObj.addProperty("saldo", r.getSaldo());
+                    itemObj.addProperty("saldoAnterior", r.getSaldoAnterior());
+                    itensArray.add(itemObj);
                 }
-                json.append("]}");
+                rootJson.add("itens", itensArray);
 
                 HttpClient client = HttpClient.newHttpClient();
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create("http://localhost:5000/api/processar"))
                         .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(json.toString()))
+                        .POST(HttpRequest.BodyPublishers.ofString(rootJson.toString(), StandardCharsets.UTF_8))
                         .build();
 
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -861,7 +850,6 @@ public class MainApp extends Application {
             File installerFile = downloadTask.getValue();
             Platform.runLater(() -> {
                 try {
-                    // Força a execução correta do instalador MSI via prompt do Windows (msiexec)
                     ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", installerFile.getAbsolutePath(), "/qb");
                     pb.start();
 
@@ -895,10 +883,9 @@ public class MainApp extends Application {
 
     private String extrairValorJson(String json, String chave) {
         try {
-            String regex = "\"" + chave + "\"\\s*:\\s*\"([^\"]+)\"";
-            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(regex).matcher(json);
-            if (matcher.find()) {
-                return matcher.group(1);
+            com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+            if (obj.has(chave)) {
+                return obj.get(chave).getAsString();
             }
             return null;
         } catch (Exception e) {
@@ -959,32 +946,15 @@ public class MainApp extends Application {
             String body = response.body();
 
             dataList.clear();
-            if (body.startsWith("[")) {
-                String cleanBody = body.substring(1, body.length() - 1);
-                if (!cleanBody.trim().isEmpty()) {
-                    String[] items = cleanBody.split("\\},\\{");
-                    for (String item : items) {
-                        String cleanedItem = item.replace("{", "").replace("}", "");
-                        String descVal = "";
-                        String saldoVal = "";
-                        String saldoAntVal = "";
+            com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(body).getAsJsonArray();
+            for (com.google.gson.JsonElement el : jsonArray) {
+                com.google.gson.JsonObject obj = el.getAsJsonObject();
+                String descVal = obj.has("descricao") ? obj.get("descricao").getAsString() : "";
+                String saldoVal = obj.has("saldo") ? obj.get("saldo").getAsString() : "";
+                String saldoAntVal = obj.has("saldoAnterior") ? obj.get("saldoAnterior").getAsString() : "";
 
-                        String[] pairs = cleanedItem.split(",");
-                        for (String pair : pairs) {
-                            String[] keyValue = pair.split(":");
-                            if (keyValue.length >= 2) {
-                                String key = keyValue[0].replace("\"", "").trim();
-                                String val = keyValue[1].replace("\"", "").trim();
-                                if (key.equals("descricao")) descVal = val;
-                                if (key.equals("saldo")) saldoVal = val;
-                                if (key.equals("saldoAnterior")) saldoAntVal = val;
-                            }
-                        }
-
-                        if (!descVal.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
-                            dataList.add(new RowData(descVal, saldoVal, saldoAntVal));
-                        }
-                    }
+                if (!descVal.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
+                    dataList.add(new RowData(descVal, saldoVal, saldoAntVal));
                 }
             }
             atualizarPlaceholderEditor();
@@ -1005,11 +975,11 @@ public class MainApp extends Application {
             String body = response.body();
 
             List<String> nomes = new ArrayList<>();
-            if (body != null && body.contains("\"nome\":\"")) {
-                String[] partes = body.split("\"nome\":\"");
-                for (int i = 1; i < partes.length; i++) {
-                    String nome = partes[i].split("\"")[0];
-                    nomes.add(nome);
+            com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(body).getAsJsonArray();
+            for (com.google.gson.JsonElement el : jsonArray) {
+                com.google.gson.JsonObject obj = el.getAsJsonObject();
+                if (obj.has("nome")) {
+                    nomes.add(obj.get("nome").getAsString());
                 }
             }
 
