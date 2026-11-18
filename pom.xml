@@ -50,7 +50,6 @@
 
     <build>
         <plugins>
-            <!-- Copia todas as dependências soltas para a pasta target -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -69,7 +68,6 @@
                 </executions>
             </plugin>
 
-            <!-- Plugin jpackage configurado com os argumentos nativos da JVM e módulos -->
             <plugin>
                 <groupId>org.panteleyev</groupId>
                 <artifactId>jpackage-maven-plugin</artifactId>

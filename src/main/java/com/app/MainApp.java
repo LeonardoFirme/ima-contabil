@@ -45,9 +45,7 @@ import java.util.Locale;
 
 public class MainApp extends Application {
 
-    // Versão atual do aplicativo instalado
     private static final String VERSAO_ATUAL = "1.0.1";
-    // Substitua pelo seu token PAT do GitHub e URL do arquivo version.json no repo privado
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/leonardofirme/ima-contabil/main/version.json";
     private static final String GITHUB_PAT_TOKEN = "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";
 
@@ -498,7 +496,6 @@ public class MainApp extends Application {
         leftPane.setPadding(new Insets(15));
         leftPane.setStyle("-fx-background-color: #f8f9fa;");
 
-        // --- PAINEL DIREITO: CENTRAL DE DOWNLOADS ---
         Label lblDownloads = new Label("Relatórios Gerados (Ctrl+Clique para múltiplos)");
         lblDownloads.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #2c3e50;");
 
@@ -698,7 +695,6 @@ public class MainApp extends Application {
         splitPane.setDividerPositions(0.75);
         VBox.setVgrow(splitPane, Priority.ALWAYS);
 
-        // --- RODAPÉ DA APLICAÇÃO (FOOTER) ---
         HBox footerBox = new HBox();
         footerBox.setPadding(new Insets(8, 15, 8, 15));
         footerBox.setStyle("-fx-background-color: #2c3e50; -fx-alignment: center-left;");
@@ -714,7 +710,6 @@ public class MainApp extends Application {
 
         footerBox.getChildren().addAll(lblFooterDev, spacer, lblFooterVer);
 
-        // Layout Principal contendo SplitPane no centro e Footer embaixo
         BorderPane root = new BorderPane();
         root.setCenter(splitPane);
         root.setBottom(footerBox);
@@ -727,27 +722,78 @@ public class MainApp extends Application {
 
         atualizarPlaceholderEditor();
         carregarDownloads();
+        verificarAtualizacaoSilenciosa(primaryStage);
     }
 
-    // Método para verificar atualizações no repositório privado do GitHub usando o Token PAT
+    private void verificarAtualizacaoSilenciosa(Stage ownerStage) {
+        Task<String[]> task = new Task<>() {
+            @Override
+            protected String[] call() throws Exception {
+                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(GITHUB_VERSION_URL))
+                        .header("Accept", "application/json")
+                        .GET();
+
+                if (GITHUB_PAT_TOKEN != null && !GITHUB_PAT_TOKEN.isEmpty()) {
+                    reqBuilder.header("Authorization", "Bearer " + GITHUB_PAT_TOKEN);
+                }
+
+                HttpResponse<String> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    String json = response.body();
+                    String versaoRemota = extrairValorJson(json, "versao");
+                    String urlDownload = extrairValorJson(json, "urlDownload");
+                    return new String[]{versaoRemota, urlDownload};
+                }
+                return null;
+            }
+        };
+
+        task.setOnSucceeded(e -> {
+            String[] resultado = task.getValue();
+            if (resultado != null && resultado[0] != null && !resultado[0].equals(VERSAO_ATUAL)) {
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.initOwner(ownerStage);
+                alert.setTitle("Atualização Disponível");
+                alert.setHeaderText("Nova versão v" + resultado[0] + " disponível!");
+                alert.setContentText("Você está na versão v" + VERSAO_ATUAL + ". Deseja abrir o navegador para baixar a atualização?");
+
+                if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                    try {
+                        java.awt.Desktop.getDesktop().browse(new URI(resultado[1]));
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        });
+
+        new Thread(task).start();
+    }
+
     private void verificarAtualizacaoSistema(Stage ownerStage) {
         Task<String[]> task = new Task<>() {
             @Override
             protected String[] call() throws Exception {
                 HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-                HttpRequest request = HttpRequest.newBuilder()
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                         .uri(URI.create(GITHUB_VERSION_URL))
-                        .header("Authorization", "Bearer " + GITHUB_PAT_TOKEN)
-                        .header("Accept", "application/vnd.github.v3+json")
-                        .GET()
-                        .build();
+                        .header("Accept", "application/json")
+                        .GET();
 
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (GITHUB_PAT_TOKEN != null && !GITHUB_PAT_TOKEN.isEmpty()) {
+                    reqBuilder.header("Authorization", "Bearer " + GITHUB_PAT_TOKEN);
+                }
+
+                HttpResponse<String> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() == 200) {
                     String json = response.body();
-                    // Extração simples do JSON sem dependências extras de biblioteca
                     String versaoRemota = extrairValorJson(json, "versao");
                     String urlDownload = extrairValorJson(json, "urlDownload");
+                    if (versaoRemota == null || urlDownload == null) {
+                        throw new Exception("Estrutura inválida no arquivo version.json.");
+                    }
                     return new String[]{versaoRemota, urlDownload};
                 }
                 throw new Exception("Falha ao consultar servidor (Código HTTP: " + response.statusCode() + ")");
@@ -759,7 +805,7 @@ public class MainApp extends Application {
             String versaoRemota = resultado[0];
             String urlDownload = resultado[1];
 
-            if (versaoRemota != null && !versaoRemota.equals(VERSAO_ATUAL)) {
+            if (!versaoRemota.equals(VERSAO_ATUAL)) {
                 Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                 alert.initOwner(ownerStage);
                 alert.setTitle("Atualização Disponível");
@@ -784,8 +830,12 @@ public class MainApp extends Application {
         });
 
         task.setOnFailed(e -> {
-            System.err.println("Erro detalhado: " + task.getException().getMessage());
-            task.getException().printStackTrace();
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.initOwner(ownerStage);
+            alert.setTitle("Erro de Conexão");
+            alert.setHeaderText("Não foi possível verificar atualizações.");
+            alert.setContentText("Detalhe: " + task.getException().getMessage());
+            alert.showAndWait();
         });
 
         new Thread(task).start();
@@ -793,12 +843,12 @@ public class MainApp extends Application {
 
     private String extrairValorJson(String json, String chave) {
         try {
-            String searchKey = "\"" + chave + "\":\"";
-            int start = json.indexOf(searchKey);
-            if (start == -1) return null;
-            start += searchKey.length();
-            int end = json.indexOf("\"", start);
-            return json.substring(start, end);
+            String regex = "\"" + chave + "\"\\s*:\\s*\"([^\"]+)\"";
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(regex).matcher(json);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+            return null;
         } catch (Exception e) {
             return null;
         }
