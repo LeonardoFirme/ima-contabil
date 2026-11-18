@@ -1,4 +1,3 @@
-// C:\developer\project-01\desktop\src\main\java\com\app\MainApp.java
 package com.app;
 
 import javafx.application.Application;
@@ -6,6 +5,7 @@ import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -22,7 +22,6 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
-import javafx.concurrent.Task;
 
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -30,12 +29,15 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -49,9 +51,7 @@ public class MainApp extends Application {
 
     private static final String VERSAO_ATUAL = "1.0.6";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
-    private static final String GITHUB_PAT_TOKEN = "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";
-
-    private static Process backendProcess;
+    private static final String API_BASE_URL = "http://localhost:5000/api";
 
     public static class RowData {
         private final SimpleStringProperty descricao;
@@ -81,25 +81,12 @@ public class MainApp extends Application {
     @Override
     public void init() throws Exception {
         super.init();
-        try {
-            File currentDir = new File(MainApp.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParentFile();
-            File exeBackend = new File(currentDir, "backend.exe");
-
-            if (exeBackend.exists()) {
-                ProcessBuilder pb = new ProcessBuilder(exeBackend.getAbsolutePath());
-                pb.directory(currentDir);
-                backendProcess = pb.start();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        BackendInitializer.startBackend();
     }
 
     @Override
     public void stop() throws Exception {
-        if (backendProcess != null) {
-            backendProcess.destroyForcibly();
-        }
+        BackendInitializer.stopBackend();
         super.stop();
     }
 
@@ -459,30 +446,47 @@ public class MainApp extends Application {
             "-fx-focus-color: transparent; " +
             "-fx-faint-focus-color: transparent;"
         );
+
         btnProcess.setOnAction(e -> {
-            try {
-                com.google.gson.JsonObject rootJson = new com.google.gson.JsonObject();
-                rootJson.addProperty("titulo", "Relatório Contábil Completo");
-                com.google.gson.JsonArray itensArray = new com.google.gson.JsonArray();
-                for (RowData r : dataList) {
-                    com.google.gson.JsonObject itemObj = new com.google.gson.JsonObject();
-                    itemObj.addProperty("descricao", r.getDescricao());
-                    itemObj.addProperty("saldo", r.getSaldo());
-                    itemObj.addProperty("saldoAnterior", r.getSaldoAnterior());
-                    itensArray.add(itemObj);
+            if (dataList.isEmpty()) {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("Aviso");
+                alert.setHeaderText("Tabela vazia");
+                alert.setContentText("Importe ou adicione itens à tabela antes de processar.");
+                alert.showAndWait();
+                return;
+            }
+
+            btnProcess.setDisable(true);
+            String tituloRelatorio = lblTituloApp.getText().replace("Arquivo: ", "");
+
+            // Cópia segura da lista para leitura na thread secundária
+            List<RowData> snapshotItens = new ArrayList<>(dataList);
+
+            Task<HttpResult> taskProcessamento = new Task<>() {
+                @Override
+                protected HttpResult call() throws Exception {
+                    com.google.gson.JsonObject rootJson = new com.google.gson.JsonObject();
+                    rootJson.addProperty("titulo", tituloRelatorio);
+                    com.google.gson.JsonArray itensArray = new com.google.gson.JsonArray();
+
+                    for (RowData r : snapshotItens) {
+                        com.google.gson.JsonObject itemObj = new com.google.gson.JsonObject();
+                        itemObj.addProperty("descricao", r.getDescricao());
+                        itemObj.addProperty("saldo", r.getSaldo());
+                        itemObj.addProperty("saldoAnterior", r.getSaldoAnterior());
+                        itensArray.add(itemObj);
+                    }
+                    rootJson.add("itens", itensArray);
+
+                    return enviarRequisicaoJson(API_BASE_URL + "/processar", "POST", rootJson.toString());
                 }
-                rootJson.add("itens", itensArray);
+            };
 
-                HttpClient client = HttpClient.newHttpClient();
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create("http://localhost:5000/api/processar"))
-                        .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(rootJson.toString(), StandardCharsets.UTF_8))
-                        .build();
-
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() == 200) {
+            taskProcessamento.setOnSucceeded(event -> {
+                btnProcess.setDisable(false);
+                HttpResult response = taskProcessamento.getValue();
+                if (response.statusCode == 200 || response.statusCode == 201) {
                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
                     alert.setTitle("Sucesso");
                     alert.setHeaderText("Operação Concluída com Sucesso");
@@ -493,19 +497,23 @@ public class MainApp extends Application {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Erro no Servidor");
                     alert.setHeaderText("Falha ao processar requisição.");
-                    alert.setContentText("Código HTTP: " + response.statusCode() + "\nResposta: " + response.body());
+                    alert.setContentText("Código HTTP: " + response.statusCode + "\nResposta: " + response.body);
                     alert.showAndWait();
                 }
-            } catch (Exception ex) {
+            });
+
+            taskProcessamento.setOnFailed(event -> {
+                btnProcess.setDisable(false);
+                Throwable ex = taskProcessamento.getException();
                 ex.printStackTrace();
-                Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Erro de Conexão com o Backend");
-                    alert.setHeaderText("Não foi possível comunicar com o servidor local.");
-                    alert.setContentText("Verifique se o backend .NET está rodando na porta 5000.\nDetalhe: " + ex.getMessage());
-                    alert.showAndWait();
-                });
-            }
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Erro de Conexão com o Backend");
+                alert.setHeaderText("Não foi possível comunicar com o servidor local.");
+                alert.setContentText("Verifique se o backend .NET está rodando na porta 5000.\nDetalhe: " + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+                alert.showAndWait();
+            });
+
+            new Thread(taskProcessamento).start();
         });
 
         Label lblMsgEditor = new Label("Não há conteúdo na tabela");
@@ -578,27 +586,42 @@ public class MainApp extends Application {
             String selecionado = listViewDownloads.getSelectionModel().getSelectedItem();
             if (selecionado != null) {
                 String nomeArquivo = selecionado.trim();
-                try {
-                    HttpClient client = HttpClient.newHttpClient();
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(URI.create("http://localhost:5000/api/downloads/" + nomeArquivo))
-                            .GET()
-                            .build();
+                btnAbrirPdf.setDisable(true);
 
-                    File tempPdf = new File(System.getProperty("java.io.tmpdir"), nomeArquivo);
-                    client.send(request, HttpResponse.BodyHandlers.ofFile(tempPdf.toPath()));
-
-                    if (tempPdf.exists()) {
-                        java.awt.Desktop.getDesktop().open(tempPdf);
+                Task<File> taskAbrir = new Task<>() {
+                    @Override
+                    protected File call() throws Exception {
+                        String encodedName = URLEncoder.encode(nomeArquivo, StandardCharsets.UTF_8).replace("+", "%20");
+                        File tempPdf = new File(System.getProperty("java.io.tmpdir"), nomeArquivo);
+                        baixarArquivoHttp(API_BASE_URL + "/downloads/" + encodedName, tempPdf);
+                        return tempPdf;
                     }
-                } catch (Exception ex) {
+                };
+
+                taskAbrir.setOnSucceeded(ev -> {
+                    btnAbrirPdf.setDisable(false);
+                    try {
+                        File tempPdf = taskAbrir.getValue();
+                        if (tempPdf.exists()) {
+                            java.awt.Desktop.getDesktop().open(tempPdf);
+                        }
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                });
+
+                taskAbrir.setOnFailed(ev -> {
+                    btnAbrirPdf.setDisable(false);
+                    Throwable ex = taskAbrir.getException();
                     ex.printStackTrace();
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Erro");
                     alert.setHeaderText("Não foi possível abrir o PDF.");
                     alert.setContentText(ex.getMessage());
                     alert.showAndWait();
-                }
+                });
+
+                new Thread(taskAbrir).start();
             }
         });
 
@@ -632,30 +655,39 @@ public class MainApp extends Application {
 
             File arquivoDestino = saveChooser.showSaveDialog(primaryStage);
             if (arquivoDestino != null) {
-                try {
-                    HttpClient client = HttpClient.newHttpClient();
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(URI.create("http://localhost:5000/api/downloads/" + selecionado))
-                            .GET()
-                            .build();
+                btnSalvarComo.setDisable(true);
+                String nomeArquivo = selecionado.trim();
 
-                    HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-                    Files.copy(response.body(), arquivoDestino.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                Task<Void> taskSalvar = new Task<>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        String encodedName = URLEncoder.encode(nomeArquivo, StandardCharsets.UTF_8).replace("+", "%20");
+                        baixarArquivoHttp(API_BASE_URL + "/downloads/" + encodedName, arquivoDestino);
+                        return null;
+                    }
+                };
 
+                taskSalvar.setOnSucceeded(ev -> {
+                    btnSalvarComo.setDisable(false);
                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
                     alert.setTitle("Sucesso");
                     alert.setHeaderText("Arquivo salvo com sucesso!");
                     alert.setContentText("Local: " + arquivoDestino.getAbsolutePath());
                     alert.showAndWait();
+                });
 
-                } catch (Exception ex) {
+                taskSalvar.setOnFailed(ev -> {
+                    btnSalvarComo.setDisable(false);
+                    Throwable ex = taskSalvar.getException();
                     ex.printStackTrace();
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Erro");
                     alert.setHeaderText("Não foi possível salvar o arquivo.");
                     alert.setContentText(ex.getMessage());
                     alert.showAndWait();
-                }
+                });
+
+                new Thread(taskSalvar).start();
             }
         });
 
@@ -688,26 +720,35 @@ public class MainApp extends Application {
             confirm.setHeaderText("Deseja apagar definitivamente os itens selecionados?");
             confirm.setContentText("Os registros serão removidos do SQLite e os PDFs apagados da máquina.");
 
-            if (confirm.showAndWait().get() == ButtonType.OK) {
-                try {
-                    HttpClient client = HttpClient.newHttpClient();
-                    for (String sel : selecionados) {
-                        String[] partes = sel.split("_");
-                        if (partes.length >= 2) {
-                            String idStr = partes[1];
-                            HttpRequest request = HttpRequest.newBuilder()
-                                    .uri(URI.create("http://localhost:5000/api/importacao/" + idStr))
-                                    .DELETE()
-                                    .build();
-                            client.send(request, HttpResponse.BodyHandlers.ofString());
+            Optional<ButtonType> result = confirm.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                btnExcluir.setDisable(true);
+
+                Task<Void> taskExcluir = new Task<>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        for (String sel : selecionados) {
+                            String[] partes = sel.split("_");
+                            if (partes.length >= 2) {
+                                String idStr = partes[1];
+                                enviarRequisicaoJson(API_BASE_URL + "/importacao/" + idStr, "DELETE", null);
+                            }
                         }
+                        return null;
                     }
+                };
 
+                taskExcluir.setOnSucceeded(ev -> {
+                    btnExcluir.setDisable(false);
                     carregarDownloads();
+                });
 
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+                taskExcluir.setOnFailed(ev -> {
+                    btnExcluir.setDisable(false);
+                    taskExcluir.getException().printStackTrace();
+                });
+
+                new Thread(taskExcluir).start();
             }
         });
 
@@ -750,21 +791,95 @@ public class MainApp extends Application {
         verificarAtualizacaoSilenciosa(primaryStage);
     }
 
+    // =========================================================================
+    // MÉTODOS AUXILIARES HTTP (COMPATÍVEIS COM MÓDULO NATIVO java.base)
+    // =========================================================================
+
+    private static class HttpResult {
+        final int statusCode;
+        final String body;
+
+        HttpResult(int statusCode, String body) {
+            this.statusCode = statusCode;
+            this.body = body;
+        }
+    }
+
+    private HttpResult enviarRequisicaoJson(String urlStr, String metodo, String jsonBody) throws Exception {
+        URL url = URI.create(urlStr).toURL();
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod(metodo);
+        conn.setConnectTimeout(5000);
+        conn.setReadTimeout(15000);
+        conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("User-Agent", "IMA-Contabil-Desktop");
+
+        if (jsonBody != null) {
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+        }
+
+        int status = conn.getResponseCode();
+        InputStream stream = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
+
+        StringBuilder responseText = new StringBuilder();
+        if (stream != null) {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    responseText.append(line.trim());
+                }
+            }
+        }
+        conn.disconnect();
+        return new HttpResult(status, responseText.toString());
+    }
+
+    private void baixarArquivoHttp(String urlStr, File destino) throws Exception {
+        URL url = URI.create(urlStr).toURL();
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setInstanceFollowRedirects(true);
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(30000);
+        conn.setRequestMethod("GET");
+        conn.setRequestProperty("User-Agent", "IMA-Contabil-Desktop");
+
+        int status = conn.getResponseCode();
+        if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == 307 || status == 308) {
+            String novaUrl = conn.getHeaderField("Location");
+            conn.disconnect();
+            baixarArquivoHttp(novaUrl, destino);
+            return;
+        }
+
+        if (status != 200) {
+            conn.disconnect();
+            throw new Exception("Falha no download. Código HTTP: " + status);
+        }
+
+        try (InputStream in = conn.getInputStream()) {
+            Files.copy(in, destino.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    // =========================================================================
+    // ATUALIZAÇÃO DO SISTEMA
+    // =========================================================================
+
     private void verificarAtualizacaoSilenciosa(Stage ownerStage) {
         Task<String[]> task = new Task<>() {
             @Override
             protected String[] call() throws Exception {
-                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
-                        .uri(URI.create(GITHUB_VERSION_URL))
-                        .header("Accept", "application/json")
-                        .GET();
-
-                HttpResponse<String> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
-                    String json = response.body();
-                    String versaoRemota = extrairValorJson(json, "versao");
-                    String urlDownload = extrairValorJson(json, "urlDownload");
+                HttpResult response = enviarRequisicaoJson(GITHUB_VERSION_URL, "GET", null);
+                if (response.statusCode == 200) {
+                    String versaoRemota = extrairValorJson(response.body, "versao");
+                    String urlDownload = extrairValorJson(response.body, "urlDownload");
                     return new String[]{versaoRemota, urlDownload};
                 }
                 return null;
@@ -785,23 +900,16 @@ public class MainApp extends Application {
         Task<String[]> task = new Task<>() {
             @Override
             protected String[] call() throws Exception {
-                HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
-                        .uri(URI.create(GITHUB_VERSION_URL))
-                        .header("Accept", "application/json")
-                        .GET();
-
-                HttpResponse<String> response = client.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
-                    String json = response.body();
-                    String versaoRemota = extrairValorJson(json, "versao");
-                    String urlDownload = extrairValorJson(json, "urlDownload");
+                HttpResult response = enviarRequisicaoJson(GITHUB_VERSION_URL, "GET", null);
+                if (response.statusCode == 200) {
+                    String versaoRemota = extrairValorJson(response.body, "versao");
+                    String urlDownload = extrairValorJson(response.body, "urlDownload");
                     if (versaoRemota == null || urlDownload == null) {
                         throw new Exception("Estrutura inválida no arquivo version.json.");
                     }
                     return new String[]{versaoRemota, urlDownload};
                 }
-                throw new Exception("Falha ao consultar servidor (Código HTTP: " + response.statusCode() + ")");
+                throw new Exception("Falha ao consultar servidor (Código HTTP: " + response.statusCode + ")");
             }
         };
 
@@ -857,27 +965,10 @@ public class MainApp extends Application {
         Task<File> downloadTask = new Task<>() {
             @Override
             protected File call() throws Exception {
-                HttpClient client = HttpClient.newBuilder()
-                        .followRedirects(HttpClient.Redirect.NORMAL)
-                        .build();
-
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(urlDownload))
-                        .header("User-Agent", "Java-HttpClient")
-                        .GET()
-                        .build();
-
-                HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-
-                if (response.statusCode() == 200) {
-                    File pastaDownloads = new File(System.getProperty("user.home"), "Downloads");
-                    File installerFile = new File(pastaDownloads, "ima-contabil-update.msi");
-
-                    Files.copy(response.body(), installerFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    return installerFile;
-                }
-
-                throw new Exception("Falha no download. HTTP: " + response.statusCode());
+                File pastaDownloads = new File(System.getProperty("user.home"), "Downloads");
+                File installerFile = new File(pastaDownloads, "ima-contabil-update.msi");
+                baixarArquivoHttp(urlDownload, installerFile);
+                return installerFile;
             }
         };
 
@@ -970,67 +1061,71 @@ public class MainApp extends Application {
     }
 
     private void carregarDadosNoEditor(String id) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("http://localhost:5000/api/importacao/" + id + "/itens"))
-                    .GET()
-                    .build();
+        Task<List<RowData>> taskCarregarItens = new Task<>() {
+            @Override
+            protected List<RowData> call() throws Exception {
+                HttpResult response = enviarRequisicaoJson(API_BASE_URL + "/importacao/" + id + "/itens", "GET", null);
+                List<RowData> itensCarregados = new ArrayList<>();
+                if (response.statusCode == 200) {
+                    com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(response.body).getAsJsonArray();
+                    for (com.google.gson.JsonElement el : jsonArray) {
+                        com.google.gson.JsonObject obj = el.getAsJsonObject();
+                        String descVal = obj.has("descricao") ? obj.get("descricao").getAsString() : "";
+                        String saldoVal = obj.has("saldo") ? obj.get("saldo").getAsString() : "";
+                        String saldoAntVal = obj.has("saldoAnterior") ? obj.get("saldoAnterior").getAsString() : "";
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            String body = response.body();
-
-            dataList.clear();
-            com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(body).getAsJsonArray();
-            for (com.google.gson.JsonElement el : jsonArray) {
-                com.google.gson.JsonObject obj = el.getAsJsonObject();
-                String descVal = obj.has("descricao") ? obj.get("descricao").getAsString() : "";
-                String saldoVal = obj.has("saldo") ? obj.get("saldo").getAsString() : "";
-                String saldoAntVal = obj.has("saldoAnterior") ? obj.get("saldoAnterior").getAsString() : "";
-
-                if (!descVal.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
-                    dataList.add(new RowData(descVal, saldoVal, saldoAntVal));
+                        if (!descVal.isEmpty() || !saldoVal.isEmpty() || !saldoAntVal.isEmpty()) {
+                            itensCarregados.add(new RowData(descVal, saldoVal, saldoAntVal));
+                        }
+                    }
                 }
+                return itensCarregados;
             }
+        };
+
+        taskCarregarItens.setOnSucceeded(e -> {
+            dataList.setAll(taskCarregarItens.getValue());
             atualizarPlaceholderEditor();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        });
+
+        taskCarregarItens.setOnFailed(e -> taskCarregarItens.getException().printStackTrace());
+
+        new Thread(taskCarregarItens).start();
     }
 
     private void carregarDownloads() {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("http://localhost:5000/api/downloads"))
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            String body = response.body();
-
-            List<String> nomes = new ArrayList<>();
-            com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(body).getAsJsonArray();
-            for (com.google.gson.JsonElement el : jsonArray) {
-                com.google.gson.JsonObject obj = el.getAsJsonObject();
-                if (obj.has("nome")) {
-                    nomes.add(obj.get("nome").getAsString());
+        Task<List<String>> taskDownloads = new Task<>() {
+            @Override
+            protected List<String> call() throws Exception {
+                HttpResult response = enviarRequisicaoJson(API_BASE_URL + "/downloads", "GET", null);
+                List<String> nomes = new ArrayList<>();
+                if (response.statusCode == 200) {
+                    com.google.gson.JsonArray jsonArray = com.google.gson.JsonParser.parseString(response.body).getAsJsonArray();
+                    for (com.google.gson.JsonElement el : jsonArray) {
+                        com.google.gson.JsonObject obj = el.getAsJsonObject();
+                        if (obj.has("nome")) {
+                            nomes.add(obj.get("nome").getAsString());
+                        }
+                    }
                 }
+                return nomes;
             }
+        };
 
-            Platform.runLater(() -> {
-                downloadsList.setAll(nomes);
-                if (lblPlaceholderDownloads != null) {
-                    lblPlaceholderDownloads.setVisible(downloadsList.isEmpty());
-                }
-            });
-        } catch (Exception ex) {
-            Platform.runLater(() -> {
-                if (lblPlaceholderDownloads != null) {
-                    lblPlaceholderDownloads.setVisible(downloadsList.isEmpty());
-                }
-            });
-        }
+        taskDownloads.setOnSucceeded(e -> {
+            downloadsList.setAll(taskDownloads.getValue());
+            if (lblPlaceholderDownloads != null) {
+                lblPlaceholderDownloads.setVisible(downloadsList.isEmpty());
+            }
+        });
+
+        taskDownloads.setOnFailed(e -> {
+            if (lblPlaceholderDownloads != null) {
+                lblPlaceholderDownloads.setVisible(downloadsList.isEmpty());
+            }
+        });
+
+        new Thread(taskDownloads).start();
     }
 
     public static void main(String[] args) {
