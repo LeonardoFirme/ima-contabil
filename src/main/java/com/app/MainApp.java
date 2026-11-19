@@ -54,7 +54,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.1.3";
+    private static final String VERSAO_ATUAL = "1.1.4";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -1073,7 +1073,7 @@ public class MainApp extends Application {
         return GITHUB_VERSION_URL + separador + "t=" + System.currentTimeMillis();
     }
 
-    // Compara versões numéricas separadas por ponto (ex.: 1.1.3 > 1.1.1); retorna > 0 se remota for maior
+    // Compara versões numéricas separadas por ponto (ex.: 1.1.4 > 1.1.1); retorna > 0 se remota for maior
     private int compararVersoes(String versaoRemota, String versaoLocal) {
         String limpaRemota = versaoRemota == null ? "" : versaoRemota.trim().replaceFirst("^[vV]", "");
         String limpaLocal = versaoLocal == null ? "" : versaoLocal.trim().replaceFirst("^[vV]", "");
