@@ -51,7 +51,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.1.1";
+    private static final String VERSAO_ATUAL = "1.1.2";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -987,6 +987,7 @@ public class MainApp extends Application {
                     ProcessBuilder pb = new ProcessBuilder("msiexec.exe", "/i", installerFile.getAbsolutePath(), "/qb");
                     pb.start();
 
+                    BackendInitializer.stopBackend();
                     Platform.exit();
                     System.exit(0);
                 } catch (Exception ex) {
