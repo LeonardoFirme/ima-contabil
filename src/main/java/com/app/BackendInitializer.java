@@ -4,47 +4,36 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 
 public class BackendInitializer {
 
     private static Process backendProcess;
+    private static boolean startedByUs = false;
 
     public static void startBackend() {
         try {
-            // Mata instâncias anteriores pendidas na porta 5000 para evitar conflito de socket
+            if (checkHealthEndpoint()) {
+                startedByUs = false;
+                return;
+            }
+
             killExistingBackendProcess();
 
-            String path = BackendInitializer.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-            if (path.startsWith("/")) {
-                path = path.substring(1);
-            }
-            File jarFile = new File(path);
-            File currentDir = jarFile.getParentFile();
-
-            // Localiza o backend.exe no diretório atual ou sobe um nível caso esteja na subpasta /app ou /lib do jpackage
-            File backendExe = new File(currentDir, "backend.exe");
-            if (!backendExe.exists() && currentDir.getName().equalsIgnoreCase("app")) {
-                currentDir = currentDir.getParentFile();
-                backendExe = new File(currentDir, "backend.exe");
-            }
-            if (!backendExe.exists() && new File(currentDir, "../backend.exe").exists()) {
-                currentDir = new File(currentDir, "..").getCanonicalFile();
-                backendExe = new File(currentDir, "backend.exe");
+            File backendExe = localizarBackendExe();
+            if (backendExe == null || !backendExe.exists()) {
+                throw new IllegalStateException(
+                    "Binário do backend não localizado no diretório de instalação nem em ambiente de desenvolvimento."
+                );
             }
 
-            if (!backendExe.exists()) {
-                throw new IllegalStateException("Binário do backend não localizado no diretório de instalação: " + backendExe.getAbsolutePath());
-            }
-
-            // CORREÇÃO CRÍTICA PARA PRODUÇÃO:
-            // Se o backend.exe estiver empacotado na raiz do app (jpackage), o diretório de trabalho
-            // deve ser o diretório onde o backend.exe realmente reside para que o SQLite salve o banco localmente.
             ProcessBuilder pb = new ProcessBuilder(backendExe.getAbsolutePath());
             pb.directory(backendExe.getParentFile());
             pb.redirectErrorStream(true);
 
             backendProcess = pb.start();
+            startedByUs = true;
 
             StringBuilder backendLogs = new StringBuilder();
             Thread outputConsumer = new Thread(() -> {
@@ -73,13 +62,51 @@ public class BackendInitializer {
             }
 
             if (!isRunning) {
-                throw new RuntimeException("O servidor backend .NET não respondeu na porta 5000.\n--- LOGS DO BACKEND ---\n" + backendLogs.toString());
+                throw new RuntimeException(
+                    "O servidor backend .NET não respondeu na porta 5000.\n--- LOGS DO BACKEND ---\n" + backendLogs
+                );
             }
 
         } catch (Exception e) {
             System.err.println("Erro crítico na inicialização do subsistema backend: " + e.getMessage());
             throw new RuntimeException(e);
         }
+    }
+
+    private static File localizarBackendExe() throws Exception {
+        String path = BackendInitializer.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+        if (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        File locationFile = new File(path);
+        File currentDir = locationFile.isDirectory() ? locationFile : locationFile.getParentFile();
+
+        File candidate = new File(currentDir, "backend.exe");
+        if (candidate.exists()) return candidate;
+
+        if (currentDir.getName().equalsIgnoreCase("classes") && currentDir.getParentFile() != null) {
+            File targetDir = currentDir.getParentFile();
+            candidate = new File(targetDir, "backend.exe");
+            if (candidate.exists()) return candidate;
+
+            if (targetDir.getParentFile() != null && targetDir.getParentFile().getParentFile() != null) {
+                File projectRoot = targetDir.getParentFile().getParentFile();
+                File devPublishExe = new File(projectRoot, "backend\\bin\\Release\\net8.0\\win-x64\\publish\\backend.exe");
+                if (devPublishExe.exists()) return devPublishExe;
+            }
+        }
+
+        if (currentDir.getParentFile() != null) {
+            candidate = new File(currentDir.getParentFile(), "backend.exe");
+            if (candidate.exists()) return candidate;
+
+            if (currentDir.getParentFile().getParentFile() != null) {
+                candidate = new File(currentDir.getParentFile().getParentFile(), "backend.exe");
+                if (candidate.exists()) return candidate;
+            }
+        }
+
+        return candidate;
     }
 
     private static void killExistingBackendProcess() {
@@ -94,19 +121,24 @@ public class BackendInitializer {
 
     private static boolean checkHealthEndpoint() {
         try {
-            URL url = new URL("http://localhost:5000/api/health");
+            URL url = URI.create("http://localhost:5000/api/health").toURL();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(600);
             connection.setReadTimeout(600);
             connection.connect();
-            return connection.getResponseCode() == 200;
+            int code = connection.getResponseCode();
+            connection.disconnect();
+            return code == 200;
         } catch (Exception e) {
             return false;
         }
     }
 
     public static void stopBackend() {
+        if (!startedByUs) {
+            return;
+        }
         if (backendProcess != null && backendProcess.isAlive()) {
             backendProcess.destroyForcibly();
         }

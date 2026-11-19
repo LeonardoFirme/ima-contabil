@@ -31,6 +31,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
@@ -43,6 +45,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
@@ -84,7 +87,6 @@ public class MainApp extends Application {
     @Override
     public void init() throws Exception {
         super.init();
-        // Define explicitamente o padrão brasileiro antes de carregar qualquer componente
         Locale.setDefault(Locale.of("pt", "BR"));
         BackendInitializer.startBackend();
     }
@@ -313,7 +315,6 @@ public class MainApp extends Application {
                     String nomeArquivo = file.getName().toLowerCase();
                     lblTituloApp.setText("Arquivo: " + file.getName());
 
-                    // Instancia o formatador monetário estritamente no padrão brasileiro (ponto no milhar, vírgula no decimal)
                     DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.of("pt", "BR"));
                     symbols.setDecimalSeparator(',');
                     symbols.setGroupingSeparator('.');
@@ -324,7 +325,6 @@ public class MainApp extends Application {
                             Sheet sheet = workbook.getSheetAt(0);
                             DataFormatter formatter = new DataFormatter(Locale.of("pt", "BR"));
 
-                            // Detecta o layout analisando o cabeçalho/primeiras linhas
                             boolean isFinancas = false;
                             for (int rIdx = 0; rIdx < Math.min(sheet.getLastRowNum(), 5); rIdx++) {
                                 Row rowCheck = sheet.getRow(rIdx);
@@ -344,7 +344,6 @@ public class MainApp extends Application {
                                 if (row == null || row.getPhysicalNumberOfCells() == 0) continue;
 
                                 if (isFinancas) {
-                                    // Layout de Finanças / Extrato (Coluna 2 = Descrição, Coluna 5 = Valor, Coluna 6 = Saldo)
                                     Cell cellDesc = row.getCell(2);
                                     Cell cellValor = row.getCell(5);
                                     Cell cellSaldo = row.getCell(6);
@@ -364,7 +363,6 @@ public class MainApp extends Application {
                                         dataList.add(new RowData(desc, saldoFormatado, saldoAntFormatado));
                                     }
                                 } else {
-                                    // Layout DRE / Balancete
                                     String desc = "";
                                     String saldoVal = "";
                                     String saldoAntVal = "";
@@ -386,7 +384,6 @@ public class MainApp extends Application {
                                             saldoAntVal = formatarValorMonetario(extrairValorCelularRobust(cellSaldoAntDRE, formatter), df);
                                         }
                                     } else {
-                                        // Varredura genérica para outros tipos de planilhas
                                         List<String> valoresEncontrados = new ArrayList<>();
                                         List<String> textosDescricao = new ArrayList<>();
 
@@ -821,9 +818,23 @@ public class MainApp extends Application {
         }
     }
 
+    private void configurarHttpsSeNecessario(HttpURLConnection conn) throws Exception {
+        if (conn instanceof HttpsURLConnection httpsConn) {
+            SSLContext sc;
+            try {
+                sc = SSLContext.getInstance("TLSv1.3");
+            } catch (Exception ignored) {
+                sc = SSLContext.getInstance("TLSv1.2");
+            }
+            sc.init(null, null, new SecureRandom());
+            httpsConn.setSSLSocketFactory(sc.getSocketFactory());
+        }
+    }
+
     private HttpResult enviarRequisicaoJson(String urlStr, String metodo, String jsonBody) throws Exception {
         URL url = URI.create(urlStr).toURL();
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        configurarHttpsSeNecessario(conn);
 
         conn.setRequestMethod(metodo);
         conn.setConnectTimeout(5000);
@@ -859,6 +870,7 @@ public class MainApp extends Application {
     private void baixarArquivoHttp(String urlStr, File destino) throws Exception {
         URL url = URI.create(urlStr).toURL();
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        configurarHttpsSeNecessario(conn);
 
         conn.setInstanceFollowRedirects(true);
         conn.setConnectTimeout(10000);
@@ -1065,7 +1077,6 @@ public class MainApp extends Application {
         try {
             if (cell.getCellType() == CellType.NUMERIC) {
                 double val = cell.getNumericCellValue();
-                // Retorna o valor numérico puro no formato internacional (ex: 23475318.44)
                 return String.format(Locale.US, "%.2f", val);
             } else if (cell.getCellType() == CellType.FORMULA) {
                 try {
@@ -1089,7 +1100,6 @@ public class MainApp extends Application {
             limpo = limpo.replace("(", "").replace(")", "").replace("R$", "").trim();
 
             double num;
-            // Identifica se a string tem vírgula (padrão brasileiro: 23.475.318,44) ou apenas ponto decimal (padrão US/POI: 23475318.44)
             if (limpo.contains(",")) {
                 limpo = limpo.replace(".", "").replace(",", ".");
                 num = Double.parseDouble(limpo);
