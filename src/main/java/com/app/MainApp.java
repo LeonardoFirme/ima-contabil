@@ -33,18 +33,25 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -87,6 +94,7 @@ public class MainApp extends Application {
     @Override
     public void init() throws Exception {
         super.init();
+        // Padroniza o locale para pt-BR na inicialização da aplicação
         Locale.setDefault(Locale.of("pt", "BR"));
         BackendInitializer.startBackend();
     }
@@ -315,6 +323,7 @@ public class MainApp extends Application {
                     String nomeArquivo = file.getName().toLowerCase();
                     lblTituloApp.setText("Arquivo: " + file.getName());
 
+                    // Configura o formato numérico para separador de milhar '.' e decimal ','
                     DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.of("pt", "BR"));
                     symbols.setDecimalSeparator(',');
                     symbols.setGroupingSeparator('.');
@@ -325,6 +334,7 @@ public class MainApp extends Application {
                             Sheet sheet = workbook.getSheetAt(0);
                             DataFormatter formatter = new DataFormatter(Locale.of("pt", "BR"));
 
+                            // Identifica o layout da planilha nas primeiras linhas para aplicar o mapeamento adequado
                             boolean isFinancas = false;
                             for (int rIdx = 0; rIdx < Math.min(sheet.getLastRowNum(), 5); rIdx++) {
                                 Row rowCheck = sheet.getRow(rIdx);
@@ -344,6 +354,7 @@ public class MainApp extends Application {
                                 if (row == null || row.getPhysicalNumberOfCells() == 0) continue;
 
                                 if (isFinancas) {
+                                    // Mapeamento específico para extratos/finanças: descrição, valor e saldo acumulado
                                     Cell cellDesc = row.getCell(2);
                                     Cell cellValor = row.getCell(5);
                                     Cell cellSaldo = row.getCell(6);
@@ -363,6 +374,7 @@ public class MainApp extends Application {
                                         dataList.add(new RowData(desc, saldoFormatado, saldoAntFormatado));
                                     }
                                 } else {
+                                    // Mapeamento para demonstrativos contábeis (DRE/Balancete) com fallback genérico
                                     String desc = "";
                                     String saldoVal = "";
                                     String saldoAntVal = "";
@@ -478,6 +490,7 @@ public class MainApp extends Application {
             btnProcess.setDisable(true);
             String tituloRelatorio = lblTituloApp.getText().replace("Arquivo: ", "");
 
+            // Captura um snapshot imutável dos itens antes de iniciar a thread em segundo plano
             List<RowData> snapshotItens = new ArrayList<>(dataList);
 
             Task<HttpResult> taskProcessamento = new Task<>() {
@@ -818,16 +831,95 @@ public class MainApp extends Application {
         }
     }
 
+    // Inicializa o SSLContext usando os certificados padrão do runtime e priorizando TLS 1.3 / TLS 1.2
+    private SSLContext criarSslContextSeguro() throws Exception {
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(
+            TrustManagerFactory.getDefaultAlgorithm()
+        );
+        tmf.init((KeyStore) null);
+
+        SSLContext sc;
+        try {
+            sc = SSLContext.getInstance("TLSv1.3");
+        } catch (Exception ignored) {
+            sc = SSLContext.getInstance("TLSv1.2");
+        }
+        sc.init(null, tmf.getTrustManagers(), new SecureRandom());
+        return sc;
+    }
+
+    // Aplica o SSLSocketFactory customizado apenas em conexões HTTPS para definir os protocolos no SSLSocket
     private void configurarHttpsSeNecessario(HttpURLConnection conn) throws Exception {
         if (conn instanceof HttpsURLConnection httpsConn) {
-            SSLContext sc;
-            try {
-                sc = SSLContext.getInstance("TLSv1.3");
-            } catch (Exception ignored) {
-                sc = SSLContext.getInstance("TLSv1.2");
+            SSLContext sc = criarSslContextSeguro();
+            List<String> protocolosSuportados = List.of(sc.getSupportedSSLParameters().getProtocols());
+            List<String> protocolosDesejados = new ArrayList<>();
+            if (protocolosSuportados.contains("TLSv1.3")) {
+                protocolosDesejados.add("TLSv1.3");
             }
-            sc.init(null, null, new SecureRandom());
-            httpsConn.setSSLSocketFactory(sc.getSocketFactory());
+            if (protocolosSuportados.contains("TLSv1.2")) {
+                protocolosDesejados.add("TLSv1.2");
+            }
+            if (!protocolosDesejados.isEmpty()) {
+                httpsConn.setSSLSocketFactory(
+                    new ProtocoloSslSocketFactory(sc.getSocketFactory(), protocolosDesejados.toArray(new String[0]))
+                );
+            } else {
+                httpsConn.setSSLSocketFactory(sc.getSocketFactory());
+            }
+        }
+    }
+
+    // Encapsula SSLSocketFactory porque HttpsURLConnection não expõe setSSLParameters diretamente na API padrão
+    private static class ProtocoloSslSocketFactory extends SSLSocketFactory {
+        private final SSLSocketFactory delegate;
+        private final String[] protocolos;
+
+        ProtocoloSslSocketFactory(SSLSocketFactory delegate, String[] protocolos) {
+            this.delegate = delegate;
+            this.protocolos = protocolos;
+        }
+
+        private Socket aplicarProtocolos(Socket socket) {
+            if (socket instanceof SSLSocket sslSocket && protocolos.length > 0) {
+                sslSocket.setEnabledProtocols(protocolos);
+            }
+            return socket;
+        }
+
+        @Override
+        public String[] getDefaultCipherSuites() {
+            return delegate.getDefaultCipherSuites();
+        }
+
+        @Override
+        public String[] getSupportedCipherSuites() {
+            return delegate.getSupportedCipherSuites();
+        }
+
+        @Override
+        public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws IOException {
+            return aplicarProtocolos(delegate.createSocket(s, host, port, autoClose));
+        }
+
+        @Override
+        public Socket createSocket(String host, int port) throws IOException {
+            return aplicarProtocolos(delegate.createSocket(host, port));
+        }
+
+        @Override
+        public Socket createSocket(String host, int port, InetAddress localHost, int localPort) throws IOException {
+            return aplicarProtocolos(delegate.createSocket(host, port, localHost, localPort));
+        }
+
+        @Override
+        public Socket createSocket(InetAddress host, int port) throws IOException {
+            return aplicarProtocolos(delegate.createSocket(host, port));
+        }
+
+        @Override
+        public Socket createSocket(InetAddress address, int port, InetAddress localAddress, int localPort) throws IOException {
+            return aplicarProtocolos(delegate.createSocket(address, port, localAddress, localPort));
         }
     }
 
@@ -1077,6 +1169,7 @@ public class MainApp extends Application {
         try {
             if (cell.getCellType() == CellType.NUMERIC) {
                 double val = cell.getNumericCellValue();
+                // Formata o double com ponto decimal para normalização antes da conversão monetária
                 return String.format(Locale.US, "%.2f", val);
             } else if (cell.getCellType() == CellType.FORMULA) {
                 try {
@@ -1100,6 +1193,7 @@ public class MainApp extends Application {
             limpo = limpo.replace("(", "").replace(")", "").replace("R$", "").trim();
 
             double num;
+            // Diferencia valores com vírgula decimal (pt-BR) de valores numéricos já normalizados com ponto decimal
             if (limpo.contains(",")) {
                 limpo = limpo.replace(".", "").replace(",", ".");
                 num = Double.parseDouble(limpo);
