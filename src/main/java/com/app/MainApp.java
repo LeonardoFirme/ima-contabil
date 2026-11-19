@@ -51,7 +51,7 @@ import java.util.Optional;
 
 public class MainApp extends Application {
 
-    private static final String VERSAO_ATUAL = "1.1.2";
+    private static final String VERSAO_ATUAL = "1.1.3";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
 
@@ -116,7 +116,7 @@ public class MainApp extends Application {
             }
         } catch (Exception ignored) {}
 
-        Label lblTitulo = new Label("IMA Contábil");
+        Label lblTitulo = new Label("EditX");
         lblTitulo.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: white;");
 
         Label lblSub = new Label("Desktop Lite - Carregando sistema...");
@@ -129,6 +129,16 @@ public class MainApp extends Application {
         VBox contentBox = new VBox(15, lblTitulo, lblSub, progressBar);
         contentBox.setAlignment(Pos.CENTER);
         contentBox.setPadding(new Insets(30));
+
+        // Label de versão posicionado no canto inferior direito sobre o overlay
+        Label lblVersaoSplash = new Label("v" + VERSAO_ATUAL);
+        lblVersaoSplash.setStyle(
+            "-fx-font-size: 11px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-text-fill: rgba(255, 255, 255, 0.85);"
+        );
+        StackPane.setAlignment(lblVersaoSplash, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(lblVersaoSplash, new Insets(0, 14, 10, 0));
 
         Pane overlay = new Pane();
         overlay.setStyle("-fx-background-color: rgba(0, 0, 0, 0.55);");
@@ -147,7 +157,7 @@ public class MainApp extends Application {
             }
         } catch (Exception ignored) {}
 
-        splashLayout.getChildren().addAll(bgImageView, overlay, contentBox);
+        splashLayout.getChildren().addAll(bgImageView, overlay, contentBox, lblVersaoSplash);
 
         Scene splashScene = new Scene(splashLayout, 640, 420);
         splashStage.setScene(splashScene);
@@ -164,15 +174,19 @@ public class MainApp extends Application {
 
         taskCarregamento.setOnSucceeded(e -> {
             splashStage.close();
-            mostrarTelaBoasVindas(primaryStage);
+            // Tela de boas-vindas desativada temporariamente; abrirTelaPrincipal é chamado diretamente
+            // mostrarTelaBoasVindas(primaryStage);
+            abrirTelaPrincipal(primaryStage);
         });
 
         new Thread(taskCarregamento).start();
     }
 
+    /*
+    // Mantido comentado para reativar no futuro quando o aplicativo tiver mais funcionalidades
     private void mostrarTelaBoasVindas(Stage primaryStage) {
         Stage welcomeStage = new Stage();
-        welcomeStage.setTitle("Bem-vindo - IMA Contábil");
+        welcomeStage.setTitle("Bem-vindo - EditX");
 
         try {
             var iconStream = MainApp.class.getResourceAsStream("/logo.png");
@@ -181,7 +195,7 @@ public class MainApp extends Application {
             }
         } catch (Exception ignored) {}
 
-        Label lblBemVindo = new Label("Bem-vindo ao IMA Contábil - Desktop Lite");
+        Label lblBemVindo = new Label("Bem-vindo ao EditX - Desktop Lite");
         lblBemVindo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white;");
 
         Label lblDescricao = new Label("Editor de lotes e conversor universal .xls / .xlsx / .csv.");
@@ -235,9 +249,10 @@ public class MainApp extends Application {
 
         Platform.runLater(() -> welcomeLayout.requestFocus());
     }
+    */
 
     private void abrirTelaPrincipal(Stage primaryStage) {
-        primaryStage.setTitle("IMA Contábil - Desktop Lite");
+        primaryStage.setTitle("EditX - Desktop Lite");
 
         try {
             var iconStream = MainApp.class.getResourceAsStream("/logo.png");
@@ -788,16 +803,16 @@ public class MainApp extends Application {
 
         HBox footerBox = new HBox();
         footerBox.setPadding(new Insets(8, 15, 8, 15));
-        footerBox.setStyle("-fx-background-color: #2c3e50; -fx-alignment: center-left;");
+        footerBox.setStyle("-fx-background-color: #f1f1f1; -fx-alignment: center-left;");
 
-        Label lblFooterDev = new Label("Desenvolvido por Leonardo Firme");
-        lblFooterDev.setStyle("-fx-text-fill: #ecf0f1; -fx-font-size: 11px; -fx-font-weight: bold;");
+        Label lblFooterDev = new Label("© 2026 EditX. Todos os direitos reservados. Desenvolvido por Leonardo Firme");
+        lblFooterDev.setStyle("-fx-text-fill: #2c3e50; -fx-font-size: 11px; -fx-font-weight: bold;");
 
         Pane spacer = new Pane();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Label lblFooterVer = new Label("Versão " + VERSAO_ATUAL);
-        lblFooterVer.setStyle("-fx-text-fill: #bdc3c7; -fx-font-size: 11px;");
+        lblFooterVer.setStyle("-fx-text-fill: #2c3e50; -fx-font-size: 11px;");
 
         footerBox.getChildren().addAll(lblFooterDev, spacer, lblFooterVer);
 
@@ -832,7 +847,7 @@ public class MainApp extends Application {
         return GITHUB_VERSION_URL + separador + "t=" + System.currentTimeMillis();
     }
 
-    // Compara versões numéricas separadas por ponto (ex.: 1.1.2 > 1.1.1); retorna > 0 se remota for maior
+    // Compara versões numéricas separadas por ponto (ex.: 1.1.3 > 1.1.1); retorna > 0 se remota for maior
     private int compararVersoes(String versaoRemota, String versaoLocal) {
         String limpaRemota = versaoRemota == null ? "" : versaoRemota.trim().replaceFirst("^[vV]", "");
         String limpaLocal = versaoLocal == null ? "" : versaoLocal.trim().replaceFirst("^[vV]", "");
