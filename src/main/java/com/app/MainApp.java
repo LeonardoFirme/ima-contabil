@@ -13,6 +13,9 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -54,6 +57,25 @@ public class MainApp extends Application {
     private static final String VERSAO_ATUAL = "1.1.3";
     private static final String GITHUB_VERSION_URL = "https://raw.githubusercontent.com/LeonardoFirme/ima-contabil/main/version.json";
     private static final String API_BASE_URL = "http://localhost:5000/api";
+
+    // CSS para hover #097f29 sem borda em botões, remoção de focos azuis e cor da lista/células
+    private static final String APP_CSS = "data:text/css," + URLEncoder.encode(
+        ".root { -fx-focus-color: transparent; -fx-faint-focus-color: transparent; }" +
+        ".menu-bar { -fx-background-color: #ffffff; -fx-border-color: #e1e4e8; -fx-border-width: 0 0 1 0; }" +
+        ".menu-bar > .container > .menu:hover, .menu-bar > .container > .menu:showing, .menu-bar > .container > .menu:focused { -fx-background-color: #097f29; }" +
+        ".menu-bar > .container > .menu:hover > .label, .menu-bar > .container > .menu:showing > .label, .menu-bar > .container > .menu:focused > .label { -fx-text-fill: #ffffff; }" +
+        ".context-menu { -fx-background-color: #ffffff; -fx-border-color: #dcdde1; }" +
+        ".context-menu .menu-item:hover, .context-menu .menu-item:focused { -fx-background-color: #097f29; }" +
+        ".context-menu .menu-item:hover > .label, .context-menu .menu-item:focused > .label { -fx-text-fill: #ffffff; }" +
+        ".button { -fx-effect: none; }" +
+        ".button:hover { -fx-background-color: #097f29; -fx-text-fill: #ffffff; -fx-effect: none; }" +
+        ".list-view { -fx-background-color: #ffffff; -fx-border-color: #dcdde1; -fx-border-radius: 4px; -fx-background-insets: 0; }" +
+        ".list-view:focused { -fx-background-color: #ffffff; -fx-border-color: #dcdde1; -fx-background-insets: 0; }" +
+        ".list-view .list-cell { -fx-background-color: #ffffff; -fx-text-fill: #2f3640; -fx-background-insets: 0; -fx-border-color: transparent; }" +
+        ".list-view .list-cell:filled:hover { -fx-background-color: #e8f5ec; -fx-text-fill: #097f29; }" +
+        ".list-view .list-cell:filled:selected, .list-view .list-cell:filled:selected:focused, .list-view:focused .list-cell:filled:selected { -fx-background-color: #097f29; -fx-text-fill: #ffffff; -fx-background-insets: 0; -fx-border-color: transparent; }",
+        StandardCharsets.UTF_8
+    ).replace("+", "%20");
 
     public static class RowData {
         private final SimpleStringProperty descricao;
@@ -160,6 +182,7 @@ public class MainApp extends Application {
         splashLayout.getChildren().addAll(bgImageView, overlay, contentBox, lblVersaoSplash);
 
         Scene splashScene = new Scene(splashLayout, 640, 420);
+        splashScene.getStylesheets().add(APP_CSS);
         splashStage.setScene(splashScene);
         splashStage.centerOnScreen();
         splashStage.show();
@@ -209,9 +232,7 @@ public class MainApp extends Application {
             "-fx-font-size: 14px; " +
             "-fx-padding: 10 22; " +
             "-fx-background-radius: 6px; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;"
+            "-fx-cursor: hand;"
         );
 
         btnEntrar.setOnAction(e -> {
@@ -243,6 +264,7 @@ public class MainApp extends Application {
         welcomeLayout.getChildren().addAll(bgImageView, overlay, contentBox);
 
         Scene scene = new Scene(welcomeLayout, 1024, 768);
+        scene.getStylesheets().add(APP_CSS);
         welcomeStage.setScene(scene);
         welcomeStage.centerOnScreen();
         welcomeStage.show();
@@ -267,7 +289,7 @@ public class MainApp extends Application {
         TableView<RowData> table = new TableView<>();
         table.setEditable(true);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setStyle("-fx-focus-color: transparent; -fx-faint-focus-color: transparent; -fx-background-color: white; -fx-border-color: #dcdde1; -fx-border-radius: 4px;");
+        table.setStyle("-fx-background-color: white; -fx-border-color: #dcdde1; -fx-border-radius: 4px;");
 
         TableColumn<RowData, String> colDesc = new TableColumn<>("Descrição / Conteúdo");
         colDesc.setCellValueFactory(cellData -> cellData.getValue().descricao);
@@ -296,13 +318,13 @@ public class MainApp extends Application {
             "-fx-border-radius: 4px; " +
             "-fx-background-radius: 4px; " +
             "-fx-padding: 8 14; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;";
+            "-fx-cursor: hand;";
 
         Button btnImportTop = new Button("📁 Importar Arquivo (.xls / .xlsx / CSV)");
         btnImportTop.setMaxWidth(Double.MAX_VALUE);
         btnImportTop.setStyle(estiloBotaoNeutro);
+        btnImportTop.setVisible(false);
+        btnImportTop.setManaged(false);
 
         Button btnImportCenter = new Button("📁 Importar Arquivo (.xls / .xlsx / CSV)");
         btnImportCenter.setStyle(
@@ -312,9 +334,7 @@ public class MainApp extends Application {
             "-fx-font-size: 12px; " +
             "-fx-padding: 8 16; " +
             "-fx-background-radius: 4px; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;"
+            "-fx-cursor: hand;"
         );
 
         Runnable acaoImportar = () -> {
@@ -482,9 +502,7 @@ public class MainApp extends Application {
             "-fx-font-size: 13px; " +
             "-fx-padding: 10 14; " +
             "-fx-background-radius: 4px; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;"
+            "-fx-cursor: hand;"
         );
 
         btnProcess.setOnAction(e -> {
@@ -574,7 +592,6 @@ public class MainApp extends Application {
 
         ListView<String> listViewDownloads = new ListView<>(downloadsList);
         listViewDownloads.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        listViewDownloads.setStyle("-fx-focus-color: transparent; -fx-faint-focus-color: transparent; -fx-background-color: white; -fx-border-color: #dcdde1; -fx-border-radius: 4px;");
         VBox.setVgrow(listViewDownloads, Priority.ALWAYS);
 
         lblPlaceholderDownloads = new Label("Nenhum relatório gerado");
@@ -604,6 +621,8 @@ public class MainApp extends Application {
         btnAtualizar.setMaxWidth(Double.MAX_VALUE);
         btnAtualizar.setStyle(estiloBotaoNeutro);
         btnAtualizar.setOnAction(e -> carregarDownloads());
+        btnAtualizar.setVisible(false);
+        btnAtualizar.setManaged(false);
 
         Button btnVerificarAtualizacao = new Button("✨ Verificar Atualizações");
         btnVerificarAtualizacao.setMaxWidth(Double.MAX_VALUE);
@@ -613,11 +632,11 @@ public class MainApp extends Application {
             "-fx-font-weight: bold; " +
             "-fx-background-radius: 4px; " +
             "-fx-padding: 8 14; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;"
+            "-fx-cursor: hand;"
         );
         btnVerificarAtualizacao.setOnAction(e -> verificarAtualizacaoSistema(primaryStage));
+        btnVerificarAtualizacao.setVisible(false);
+        btnVerificarAtualizacao.setManaged(false);
 
         Button btnAbrirPdf = new Button("📂 Abrir PDF Selecionado");
         btnAbrirPdf.setMaxWidth(Double.MAX_VALUE);
@@ -664,6 +683,8 @@ public class MainApp extends Application {
                 new Thread(taskAbrir).start();
             }
         });
+        btnAbrirPdf.setVisible(false);
+        btnAbrirPdf.setManaged(false);
 
         Button btnSalvarComo = new Button("💾 Salvar PDF Como...");
         btnSalvarComo.setMaxWidth(Double.MAX_VALUE);
@@ -673,9 +694,7 @@ public class MainApp extends Application {
             "-fx-font-weight: bold; " +
             "-fx-background-radius: 4px; " +
             "-fx-padding: 8 14; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;"
+            "-fx-cursor: hand;"
         );
         btnSalvarComo.setOnAction(e -> {
             String selecionado = listViewDownloads.getSelectionModel().getSelectedItem();
@@ -730,6 +749,8 @@ public class MainApp extends Application {
                 new Thread(taskSalvar).start();
             }
         });
+        btnSalvarComo.setVisible(false);
+        btnSalvarComo.setManaged(false);
 
         Button btnExcluir = new Button("🗑️ Excluir Selecionado(s)");
         btnExcluir.setMaxWidth(Double.MAX_VALUE);
@@ -739,9 +760,7 @@ public class MainApp extends Application {
             "-fx-font-weight: bold; " +
             "-fx-background-radius: 4px; " +
             "-fx-padding: 8 14; " +
-            "-fx-cursor: hand; " +
-            "-fx-focus-color: transparent; " +
-            "-fx-faint-focus-color: transparent;"
+            "-fx-cursor: hand;"
         );
         btnExcluir.setOnAction(e -> {
             List<String> selecionados = new ArrayList<>(listViewDownloads.getSelectionModel().getSelectedItems());
@@ -791,6 +810,8 @@ public class MainApp extends Application {
                 new Thread(taskExcluir).start();
             }
         });
+        btnExcluir.setVisible(false);
+        btnExcluir.setManaged(false);
 
         VBox rightPane = new VBox(12, lblDownloads, stackDownloads, btnAtualizar, btnVerificarAtualizacao, btnAbrirPdf, btnSalvarComo, btnExcluir);
         rightPane.setPadding(new Insets(15));
@@ -800,6 +821,9 @@ public class MainApp extends Application {
         SplitPane splitPane = new SplitPane(leftPane, rightPane);
         splitPane.setDividerPositions(0.75);
         VBox.setVgrow(splitPane, Priority.ALWAYS);
+
+        // Barra de menu superior padrão de aplicação desktop logo abaixo da barra de título
+        MenuBar menuBar = construirMenuBar(primaryStage, listViewDownloads, acaoImportar, btnProcess);
 
         HBox footerBox = new HBox();
         footerBox.setPadding(new Insets(8, 15, 8, 15));
@@ -817,10 +841,15 @@ public class MainApp extends Application {
         footerBox.getChildren().addAll(lblFooterDev, spacer, lblFooterVer);
 
         BorderPane root = new BorderPane();
+        root.setTop(menuBar);
         root.setCenter(splitPane);
         root.setBottom(footerBox);
 
         Scene scene = new Scene(root, 1024, 768);
+        scene.getStylesheets().add(APP_CSS);
+
+        // Registra os atalhos internos diretamente na Scene para disparo rápido em qualquer ponto da janela
+        registrarAtalhosInternos(scene, primaryStage, listViewDownloads, acaoImportar, btnProcess);
 
         primaryStage.setScene(scene);
         primaryStage.centerOnScreen();
@@ -829,6 +858,203 @@ public class MainApp extends Application {
         atualizarPlaceholderEditor();
         carregarDownloads();
         verificarAtualizacaoSilenciosa(primaryStage);
+    }
+
+    // Monta a barra de menus superior exibindo o atalho no próprio texto do título de cada link
+    private MenuBar construirMenuBar(Stage primaryStage, ListView<String> listViewDownloads, Runnable acaoImportar, Button btnProcess) {
+        MenuBar menuBar = new MenuBar();
+
+        // Menu Arquivo
+        Menu menuArquivo = new Menu("Arquivo");
+        MenuItem itemImportar = new MenuItem("Importar Arquivo... (Ctrl+O)");
+        itemImportar.setOnAction(e -> acaoImportar.run());
+
+        MenuItem itemGerarPdf = new MenuItem("Salvar na Lista & Gerar PDF (Ctrl+G)");
+        itemGerarPdf.setOnAction(e -> btnProcess.fire());
+
+        MenuItem itemLimparTabela = new MenuItem("Limpar Tabela (Ctrl+L)");
+        itemLimparTabela.setOnAction(e -> acaoLimparTabela());
+
+        MenuItem itemSair = new MenuItem("Sair (Ctrl+Q)");
+        itemSair.setOnAction(e -> primaryStage.close());
+
+        menuArquivo.getItems().addAll(itemImportar, itemGerarPdf, new SeparatorMenuItem(), itemLimparTabela, new SeparatorMenuItem(), itemSair);
+
+        // Menu Relatórios
+        Menu menuRelatorios = new Menu("Relatórios");
+        MenuItem itemAtualizarLista = new MenuItem("Atualizar Lista (F5)");
+        itemAtualizarLista.setOnAction(e -> carregarDownloads());
+
+        MenuItem itemAbrirPdf = new MenuItem("Abrir PDF Selecionado (Ctrl+Enter)");
+        itemAbrirPdf.setOnAction(e -> acaoAbrirPdfSelecionado(primaryStage, listViewDownloads));
+
+        MenuItem itemSalvarComo = new MenuItem("Salvar PDF Como... (Ctrl+S)");
+        itemSalvarComo.setOnAction(e -> acaoSalvarPdfComo(primaryStage, listViewDownloads));
+
+        MenuItem itemExcluirSelecionados = new MenuItem("Excluir Selecionado(s) (Del)");
+        itemExcluirSelecionados.setOnAction(e -> acaoExcluirSelecionados(primaryStage, listViewDownloads));
+
+        menuRelatorios.getItems().addAll(itemAtualizarLista, new SeparatorMenuItem(), itemAbrirPdf, itemSalvarComo, new SeparatorMenuItem(), itemExcluirSelecionados);
+
+        // Menu Sistema
+        Menu menuSistema = new Menu("Sistema");
+        MenuItem itemVerificarAtualizacoes = new MenuItem("Verificar Atualizações (Ctrl+U)");
+        itemVerificarAtualizacoes.setOnAction(e -> verificarAtualizacaoSistema(primaryStage));
+
+        MenuItem itemSobre = new MenuItem("Sobre o EditX (F1)");
+        itemSobre.setOnAction(e -> acaoSobreEditX(primaryStage));
+
+        menuSistema.getItems().addAll(itemVerificarAtualizacoes, new SeparatorMenuItem(), itemSobre);
+
+        menuBar.getMenus().addAll(menuArquivo, menuRelatorios, menuSistema);
+        return menuBar;
+    }
+
+    // Registra os atalhos na Scene para que funcionem mesmo quando o Menu não estiver aberto
+    private void registrarAtalhosInternos(Scene scene, Stage primaryStage, ListView<String> listViewDownloads, Runnable acaoImportar, Button btnProcess) {
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.O, KeyCombination.CONTROL_DOWN), acaoImportar);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.G, KeyCombination.CONTROL_DOWN), btnProcess::fire);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.L, KeyCombination.CONTROL_DOWN), this::acaoLimparTabela);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.Q, KeyCombination.CONTROL_DOWN), primaryStage::close);
+
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F5), this::carregarDownloads);
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.ENTER, KeyCombination.CONTROL_DOWN), () -> acaoAbrirPdfSelecionado(primaryStage, listViewDownloads));
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN), () -> acaoSalvarPdfComo(primaryStage, listViewDownloads));
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.DELETE), () -> acaoExcluirSelecionados(primaryStage, listViewDownloads));
+
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.U, KeyCombination.CONTROL_DOWN), () -> verificarAtualizacaoSistema(primaryStage));
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F1), () -> acaoSobreEditX(primaryStage));
+    }
+
+    private void acaoLimparTabela() {
+        dataList.clear();
+        lblTituloApp.setText("Editor de Lotes (XLS, XLSX, CSV)");
+        atualizarPlaceholderEditor();
+    }
+
+    private void acaoSobreEditX(Stage primaryStage) {
+        exibirInfoSimples(
+            primaryStage,
+            "EditX - Desktop Lite (v" + VERSAO_ATUAL + ")",
+            "Editor de lotes e conversor de planilhas (.xls, .xlsx, .csv).\nDesenvolvido por Leonardo Firme."
+        );
+    }
+
+    private void acaoAbrirPdfSelecionado(Stage primaryStage, ListView<String> listViewDownloads) {
+        String selecionado = listViewDownloads.getSelectionModel().getSelectedItem();
+        if (selecionado == null) {
+            exibirAvisoSimples(primaryStage, "Nenhum relatório selecionado", "Selecione um relatório na lista para abrir o PDF.");
+            return;
+        }
+        String nomeArquivo = selecionado.trim();
+        Task<File> taskAbrir = new Task<>() {
+            @Override
+            protected File call() throws Exception {
+                String encodedName = URLEncoder.encode(nomeArquivo, StandardCharsets.UTF_8).replace("+", "%20");
+                File tempPdf = new File(System.getProperty("java.io.tmpdir"), nomeArquivo);
+                baixarArquivoHttp(API_BASE_URL + "/downloads/" + encodedName, tempPdf);
+                return tempPdf;
+            }
+        };
+        taskAbrir.setOnSucceeded(ev -> {
+            try {
+                File tempPdf = taskAbrir.getValue();
+                if (tempPdf.exists()) {
+                    java.awt.Desktop.getDesktop().open(tempPdf);
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+        taskAbrir.setOnFailed(ev -> exibirErroSimples(primaryStage, "Erro ao abrir PDF", taskAbrir.getException().getMessage()));
+        new Thread(taskAbrir).start();
+    }
+
+    private void acaoSalvarPdfComo(Stage primaryStage, ListView<String> listViewDownloads) {
+        String selecionado = listViewDownloads.getSelectionModel().getSelectedItem();
+        if (selecionado == null) {
+            exibirAvisoSimples(primaryStage, "Nenhum relatório selecionado", "Selecione um relatório na lista para salvar.");
+            return;
+        }
+        FileChooser saveChooser = new FileChooser();
+        saveChooser.setTitle("Salvar Relatório PDF");
+        saveChooser.setInitialFileName(selecionado);
+        saveChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Arquivo PDF (*.pdf)", "*.pdf"));
+
+        File arquivoDestino = saveChooser.showSaveDialog(primaryStage);
+        if (arquivoDestino != null) {
+            String nomeArquivo = selecionado.trim();
+            Task<Void> taskSalvar = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    String encodedName = URLEncoder.encode(nomeArquivo, StandardCharsets.UTF_8).replace("+", "%20");
+                    baixarArquivoHttp(API_BASE_URL + "/downloads/" + encodedName, arquivoDestino);
+                    return null;
+                }
+            };
+            taskSalvar.setOnSucceeded(ev -> exibirInfoSimples(primaryStage, "Arquivo salvo com sucesso!", "Local: " + arquivoDestino.getAbsolutePath()));
+            taskSalvar.setOnFailed(ev -> exibirErroSimples(primaryStage, "Erro ao salvar PDF", taskSalvar.getException().getMessage()));
+            new Thread(taskSalvar).start();
+        }
+    }
+
+    private void acaoExcluirSelecionados(Stage primaryStage, ListView<String> listViewDownloads) {
+        List<String> selecionados = new ArrayList<>(listViewDownloads.getSelectionModel().getSelectedItems());
+        if (selecionados.isEmpty()) {
+            exibirAvisoSimples(primaryStage, "Nenhum item selecionado", "Selecione um ou mais relatórios na lista para excluir.");
+            return;
+        }
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.initOwner(primaryStage);
+        confirm.setTitle("Confirmação de Exclusão Definitiva");
+        confirm.setHeaderText("Deseja apagar definitivamente os itens selecionados?");
+        confirm.setContentText("Os registros serão removidos do SQLite e os PDFs apagados da máquina.");
+
+        Optional<ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            Task<Void> taskExcluir = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    for (String sel : selecionados) {
+                        String[] partes = sel.split("_");
+                        if (partes.length >= 2) {
+                            enviarRequisicaoJson(API_BASE_URL + "/importacao/" + partes[1], "DELETE", null);
+                        }
+                    }
+                    return null;
+                }
+            };
+            taskExcluir.setOnSucceeded(ev -> carregarDownloads());
+            taskExcluir.setOnFailed(ev -> exibirErroSimples(primaryStage, "Erro ao excluir", taskExcluir.getException().getMessage()));
+            new Thread(taskExcluir).start();
+        }
+    }
+
+    private void exibirInfoSimples(Stage owner, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.initOwner(owner);
+        alert.setTitle("EditX");
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+
+    private void exibirAvisoSimples(Stage owner, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.initOwner(owner);
+        alert.setTitle("Aviso");
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+
+    private void exibirErroSimples(Stage owner, String header, String content) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.initOwner(owner);
+        alert.setTitle("Erro");
+        alert.setHeaderText(header);
+        alert.setContentText(content != null ? content : "Erro inesperado.");
+        alert.showAndWait();
     }
 
     private static class HttpResult {
