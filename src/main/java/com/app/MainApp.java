@@ -826,6 +826,41 @@ public class MainApp extends Application {
         }
     }
 
+    // Adiciona timestamp à consulta do manifest para reduzir leitura de versão em cache no CDN
+    private String montarUrlVersionamentoComCacheBusting() {
+        String separador = GITHUB_VERSION_URL.contains("?") ? "&" : "?";
+        return GITHUB_VERSION_URL + separador + "t=" + System.currentTimeMillis();
+    }
+
+    // Compara versões numéricas separadas por ponto (ex.: 1.1.2 > 1.1.1); retorna > 0 se remota for maior
+    private int compararVersoes(String versaoRemota, String versaoLocal) {
+        String limpaRemota = versaoRemota == null ? "" : versaoRemota.trim().replaceFirst("^[vV]", "");
+        String limpaLocal = versaoLocal == null ? "" : versaoLocal.trim().replaceFirst("^[vV]", "");
+
+        String[] partesRemota = limpaRemota.split("\\.");
+        String[] partesLocal = limpaLocal.split("\\.");
+        int maxLen = Math.max(partesRemota.length, partesLocal.length);
+
+        for (int i = 0; i < maxLen; i++) {
+            int rNum = 0;
+            int lNum = 0;
+            if (i < partesRemota.length) {
+                try {
+                    rNum = Integer.parseInt(partesRemota[i].replaceAll("\\D.*", ""));
+                } catch (NumberFormatException ignored) {}
+            }
+            if (i < partesLocal.length) {
+                try {
+                    lNum = Integer.parseInt(partesLocal[i].replaceAll("\\D.*", ""));
+                } catch (NumberFormatException ignored) {}
+            }
+            if (rNum != lNum) {
+                return Integer.compare(rNum, lNum);
+            }
+        }
+        return 0;
+    }
+
     // Executa requisições HTTP/HTTPS usando java.net.http.HttpClient para evitar conflitos legados de SSLSocketFactory
     private HttpResult enviarRequisicaoJson(String urlStr, String metodo, String jsonBody) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -872,7 +907,7 @@ public class MainApp extends Application {
             @Override
             protected String[] call() throws Exception {
                 try {
-                    HttpResult response = enviarRequisicaoJson(GITHUB_VERSION_URL, "GET", null);
+                    HttpResult response = enviarRequisicaoJson(montarUrlVersionamentoComCacheBusting(), "GET", null);
                     if (response.statusCode == 200) {
                         com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(response.body).getAsJsonObject();
                         String versaoRemota = obj.has("versao") ? obj.get("versao").getAsString() : null;
@@ -895,7 +930,8 @@ public class MainApp extends Application {
                 String versaoRemota = resultado[0];
                 String urlDownload = resultado[1];
 
-                if (!versaoRemota.equals(VERSAO_ATUAL)) {
+                // Notifica apenas quando a versão remota é estritamente superior à instalada
+                if (compararVersoes(versaoRemota, VERSAO_ATUAL) > 0) {
                     Platform.runLater(() -> exibirNotificacaoAtualizacao(versaoRemota, urlDownload, ownerStage));
                 }
             }
@@ -908,7 +944,7 @@ public class MainApp extends Application {
         Task<String[]> task = new Task<>() {
             @Override
             protected String[] call() throws Exception {
-                HttpResult response = enviarRequisicaoJson(GITHUB_VERSION_URL, "GET", null);
+                HttpResult response = enviarRequisicaoJson(montarUrlVersionamentoComCacheBusting(), "GET", null);
                 if (response.statusCode == 200) {
                     String versaoRemota = extrairValorJson(response.body, "versao");
                     String urlDownload = extrairValorJson(response.body, "urlDownload");
@@ -926,7 +962,8 @@ public class MainApp extends Application {
             String versaoRemota = resultado[0];
             String urlDownload = resultado[1];
 
-            if (!versaoRemota.equals(VERSAO_ATUAL)) {
+            // Dispara atualização apenas se a versão remota for maior que VERSAO_ATUAL
+            if (compararVersoes(versaoRemota, VERSAO_ATUAL) > 0) {
                 Platform.runLater(() -> exibirNotificacaoAtualizacao(versaoRemota, urlDownload, ownerStage));
             } else {
                 Platform.runLater(() -> {
